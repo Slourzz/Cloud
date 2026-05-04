@@ -1,0 +1,38 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "drTnlN20yEKqpoEvqAOy6"
+uri = "file://artifacts/music-player/public/album1.png"
+type = "image"
+title = "Vibrant geometric abstract art"
+
+[[generated]]
+id = "ppMmQiZyrU4kL7YTKMnpQ"
+uri = "file://artifacts/music-player/public/album2.png"
+type = "image"
+title = "Deep fluid electronic waves"
+
+[[generated]]
+id = "a-n57tGl1TFMTKwKo1kmz"
+uri = "file://artifacts/music-player/public/album3.png"
+type = "image"
+title = "Pastel sunset lo-fi aesthetic"
+
+[[generated]]
+id = "Myjtd7owVnv5AIP8TR72i"
+uri = "file://artifacts/music-player/public/album4.png"
+type = "image"
+title = "Energetic bold pop shapes"
+
+[[generated]]
+id = "y8QzqaYy1ANfTbiIdTwQM"
+uri = "file://artifacts/music-player/public/album5.png"
+type = "image"
+title = "Organic textured folk abstract"
+
+[[generated]]
+id = "XtsA7a9XP7BcAUhsvuIxO"
+uri = "file://artifacts/music-player/public/album6.png"
+type = "image"
+title = "Soft ambient blurred lights"
