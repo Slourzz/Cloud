@@ -177,13 +177,25 @@
     @apply bg-surface-container;
   }
 
-  /* Dynamic slider — fill/thumb use the current album's extracted color */
+  /* Dynamic slider — fill/thumb follow the album color (Radix UI structure) */
   .dynamic-slider [role="slider"] {
     background: rgb(var(--dyn-v)) !important;
     border-color: rgb(var(--dyn-v)) !important;
-    box-shadow: 0 0 0 3px rgb(var(--dyn-v) / 0.25) !important;
+    box-shadow: 0 0 0 3px rgb(var(--dyn-v) / 0.28) !important;
   }
-  .dynamic-slider [data-orientation="horizontal"] > span:first-child > span {
+  /* Track background */
+  .dynamic-slider [data-radix-slider-track] {
+    background: rgb(var(--dyn-v) / 0.2) !important;
+  }
+  /* Filled range */
+  .dynamic-slider [data-radix-slider-range] {
+    background: rgb(var(--dyn-v)) !important;
+  }
+  /* Fallback for shadcn/ui Slider (no data attrs) — nth-child targeting */
+  .dynamic-slider > span > span:first-child {
+    background: rgb(var(--dyn-v) / 0.2) !important;
+  }
+  .dynamic-slider > span > span:first-child > span {
     background: rgb(var(--dyn-v)) !important;
   }
 

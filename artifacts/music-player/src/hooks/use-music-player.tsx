@@ -13,21 +13,6 @@ export interface Song {
 
 export type AudioQuality = "low" | "normal" | "high" | "lossless";
 
-export const DEMO_SONGS: Song[] = [
-  { id: "1", title: "Midnight City", artist: "Chilled Cow", album: "Lo-Fi Beats", duration: 184, coverUrl: "/album3.png" },
-  { id: "2", title: "Neon Nights", artist: "Synthwave Collective", album: "Retro Future", duration: 245, coverUrl: "/album2.png" },
-  { id: "3", title: "Golden Hour", artist: "Indie Souls", album: "Acoustic Afternoons", duration: 210, coverUrl: "/album5.png" },
-  { id: "4", title: "Electric Pulse", artist: "DJ Vortex", album: "Club Bangers", duration: 195, coverUrl: "/album4.png" },
-  { id: "5", title: "Ocean Breeze", artist: "Ambient Vibes", album: "Chill Tides", duration: 320, coverUrl: "/album6.png" },
-  { id: "6", title: "Abstract Thoughts", artist: "Modern Art", album: "Geometric Sounds", duration: 175, coverUrl: "/album1.png" },
-  { id: "7", title: "Sunset Drive", artist: "Chilled Cow", album: "Lo-Fi Beats", duration: 198, coverUrl: "/album3.png" },
-  { id: "8", title: "Cyberpunk City", artist: "Synthwave Collective", album: "Retro Future", duration: 270, coverUrl: "/album2.png" },
-  { id: "9", title: "Morning Dew", artist: "Indie Souls", album: "Acoustic Afternoons", duration: 185, coverUrl: "/album5.png" },
-  { id: "10", title: "Bass Drop", artist: "DJ Vortex", album: "Club Bangers", duration: 215, coverUrl: "/album4.png" },
-  { id: "11", title: "Deep Sea", artist: "Ambient Vibes", album: "Chill Tides", duration: 290, coverUrl: "/album6.png" },
-  { id: "12", title: "Colors Collision", artist: "Modern Art", album: "Geometric Sounds", duration: 205, coverUrl: "/album1.png" },
-];
-
 interface MusicPlayerState {
   currentSong: Song | null;
   queue: Song[];
@@ -60,13 +45,13 @@ interface MusicPlayerState {
 
 const MusicPlayerContext = createContext<MusicPlayerState | undefined>(undefined);
 
-async function searchItunesArtwork(title: string): Promise<string | null> {
+async function searchItunesArtwork(title: string, artist: string): Promise<string | null> {
   try {
-    const clean = title.replace(/[^\w\s]/g, "").trim();
-    if (!clean) return null;
+    const term = `${title} ${artist}`.replace(/unknown artist/i, "").replace(/[^\w\s]/g, "").trim();
+    if (!term) return null;
     const res = await fetch(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&entity=musicTrack&limit=3&media=music`,
-      { signal: AbortSignal.timeout(6000) }
+      `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=musicTrack&limit=5&media=music`,
+      { signal: AbortSignal.timeout(7000) }
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -81,14 +66,14 @@ async function searchItunesArtwork(title: string): Promise<string | null> {
 }
 
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
-  const [currentSong, setCurrentSong] = useState<Song | null>(DEMO_SONGS[0]);
-  const [queue, setQueue] = useState<Song[]>(DEMO_SONGS.slice(1));
+  const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [queue, setQueue] = useState<Song[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [volume, setVolumeState] = useState(80);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
-  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set(["1", "4"]));
+  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
   const [userSongs, setUserSongs] = useState<Song[]>([]);
   const [audioQuality, setAudioQualityState] = useState<AudioQuality>("high");
   const [crossfadeSeconds, setCrossfadeSecondsState] = useState(3);
@@ -128,6 +113,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setCurrentSong(nextSong);
       setProgress(0);
       setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
     }
   };
 
@@ -135,28 +122,22 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (isCrossfadingRef.current) return;
     const cfSecs = crossfadeSecondsRef.current;
     if (cfSecs === 0 || !nextSong.audioUrl) { doNext(); return; }
-
     isCrossfadingRef.current = true;
     const incoming = incomingAudioRef.current!;
     incoming.src = nextSong.audioUrl;
     incoming.volume = 0;
     incoming.play().catch(() => {});
-
     const startTime = Date.now();
     const totalMs = cfSecs * 1000;
     const startVol = volumeRef.current / 100;
-
     if (crossfadeIntervalRef.current) clearInterval(crossfadeIntervalRef.current);
-
     crossfadeIntervalRef.current = setInterval(() => {
       const ratio = Math.min((Date.now() - startTime) / totalMs, 1);
       if (mainAudioRef.current) mainAudioRef.current.volume = startVol * (1 - ratio);
       incoming.volume = startVol * ratio;
-
       if (ratio >= 1) {
         if (crossfadeIntervalRef.current) clearInterval(crossfadeIntervalRef.current);
         isCrossfadingRef.current = false;
-
         const cur = currentSongRef.current;
         mainAudioRef.current?.pause();
         const temp = mainAudioRef.current!;
@@ -165,7 +146,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         incomingAudioRef.current.pause();
         incomingAudioRef.current.src = "";
         mainAudioRef.current.volume = startVol;
-
         attachAudioListeners();
         skipAudioSetupRef.current = true;
         const q = queueRef.current;
@@ -202,13 +182,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (!mainAudioRef.current) return;
     if (skipAudioSetupRef.current) { skipAudioSetupRef.current = false; return; }
     if (isCrossfadingRef.current) return;
-
     const audio = mainAudioRef.current;
     if (crossfadeIntervalRef.current) clearInterval(crossfadeIntervalRef.current);
     isCrossfadingRef.current = false;
     incomingAudioRef.current!.pause();
     incomingAudioRef.current!.src = "";
-
     if (currentSong?.audioUrl) {
       audio.src = currentSong.audioUrl;
       audio.volume = volume / 100;
@@ -232,24 +210,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (mainAudioRef.current) mainAudioRef.current.volume = volume / 100;
   }, [volume]);
 
-  useEffect(() => {
-    if (currentSong?.audioUrl) return;
-    let interval: ReturnType<typeof setInterval>;
-    if (isPlaying && currentSong) {
-      interval = setInterval(() => {
-        setProgress((p) => {
-          if (p >= currentSong.duration) {
-            if (isRepeat) return 0;
-            setTimeout(() => doNext(), 0);
-            return p;
-          }
-          return p + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, currentSong, isRepeat]);
-
   const play = (song?: Song) => {
     if (song && song.id !== currentSong?.id) {
       setCurrentSong(song);
@@ -261,25 +221,17 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const pause = () => setIsPlaying(false);
   const togglePlayPause = () => setIsPlaying((p) => !p);
   const next = () => doNext();
-
   const prev = () => {
     setProgress(0);
-    if (currentSong?.audioUrl && mainAudioRef.current) {
-      mainAudioRef.current.currentTime = 0;
-    }
+    if (currentSong?.audioUrl && mainAudioRef.current) mainAudioRef.current.currentTime = 0;
   };
-
   const seek = (time: number) => {
     setProgress(time);
-    if (currentSong?.audioUrl && mainAudioRef.current) {
-      mainAudioRef.current.currentTime = time;
-    }
+    if (currentSong?.audioUrl && mainAudioRef.current) mainAudioRef.current.currentTime = time;
   };
-
   const setVolume = (vol: number) => setVolumeState(vol);
   const toggleShuffle = () => setIsShuffle((s) => !s);
   const toggleRepeat = () => setIsRepeat((r) => !r);
-
   const toggleLike = (songId: string) => {
     setLikedSongs((prev) => {
       const next = new Set(prev);
@@ -288,9 +240,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       return next;
     });
   };
-
   const reorderQueue = (newQueue: Song[]) => setQueue(newQueue);
-
   const addToQueue = (song: Song) => {
     if (!currentSong) play(song);
     else setQueue((q) => [...q, song]);
@@ -301,13 +251,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       const url = URL.createObjectURL(file);
       const name = file.name.replace(/\.[^/.]+$/, "");
       const audio = new Audio(url);
-
       const finalize = (dur: number) => {
         const newSong: Song = {
           id: `user-${Date.now()}-${Math.random()}`,
           title: name,
           artist: "Unknown Artist",
-          album: "My Files",
+          album: "Mis archivos",
           duration: Math.floor(dur) || 0,
           coverUrl: "/album1.png",
           audioUrl: url,
@@ -316,15 +265,14 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         setUserSongs((prev) => [...prev, newSong]);
         addToQueue(newSong);
         resolve();
-
-        // Async: search iTunes for artwork
-        searchItunesArtwork(name).then((artUrl) => {
+        // Auto-search album art from iTunes
+        searchItunesArtwork(name, "").then((artUrl) => {
           if (!artUrl) return;
           setUserSongs((prev) => prev.map((s) => s.id === newSong.id ? { ...s, coverUrl: artUrl } : s));
           setCurrentSong((prev) => prev?.id === newSong.id ? { ...prev, coverUrl: artUrl } : prev);
+          setQueue((prev) => prev.map((s) => s.id === newSong.id ? { ...s, coverUrl: artUrl } : s));
         });
       };
-
       audio.addEventListener("loadedmetadata", () => finalize(audio.duration));
       audio.addEventListener("error", () => finalize(0));
     });
@@ -332,20 +280,18 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const setAudioQuality = (q: AudioQuality) => setAudioQualityState(q);
   const setCrossfadeSeconds = (s: number) => setCrossfadeSecondsState(s);
-  const allSongs = [...DEMO_SONGS, ...userSongs];
+  const allSongs = [...userSongs];
 
   return (
-    <MusicPlayerContext.Provider
-      value={{
-        currentSong, queue, isPlaying, progress, volume,
-        isShuffle, isRepeat, likedSongs, userSongs, allSongs,
-        audioQuality, crossfadeSeconds,
-        play, pause, togglePlayPause, next, prev,
-        seek, setVolume, toggleShuffle, toggleRepeat, toggleLike,
-        reorderQueue, addToQueue, addUserSong,
-        setAudioQuality, setCrossfadeSeconds,
-      }}
-    >
+    <MusicPlayerContext.Provider value={{
+      currentSong, queue, isPlaying, progress, volume,
+      isShuffle, isRepeat, likedSongs, userSongs, allSongs,
+      audioQuality, crossfadeSeconds,
+      play, pause, togglePlayPause, next, prev,
+      seek, setVolume, toggleShuffle, toggleRepeat, toggleLike,
+      reorderQueue, addToQueue, addUserSong,
+      setAudioQuality, setCrossfadeSeconds,
+    }}>
       {children}
     </MusicPlayerContext.Provider>
   );

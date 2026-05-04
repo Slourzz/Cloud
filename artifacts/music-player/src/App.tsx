@@ -6,6 +6,7 @@ import { MusicPlayerProvider } from "@/hooks/use-music-player";
 import { ThemeColorsProvider } from "@/hooks/use-theme-colors";
 import { PlaylistsProvider } from "@/hooks/use-playlists";
 import { LyricsProvider } from "@/hooks/use-lyrics";
+import { DarkModeProvider } from "@/hooks/use-dark-mode";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
 
@@ -38,17 +39,19 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <MusicPlayerProvider>
-          <ThemeColorsProvider>
-            <PlaylistsProvider>
-              <LyricsProvider>
-                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                  <Router />
-                </WouterRouter>
-              </LyricsProvider>
-            </PlaylistsProvider>
-          </ThemeColorsProvider>
-        </MusicPlayerProvider>
+        <DarkModeProvider>
+          <MusicPlayerProvider>
+            <ThemeColorsProvider>
+              <PlaylistsProvider>
+                <LyricsProvider>
+                  <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                    <Router />
+                  </WouterRouter>
+                </LyricsProvider>
+              </PlaylistsProvider>
+            </ThemeColorsProvider>
+          </MusicPlayerProvider>
+        </DarkModeProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
