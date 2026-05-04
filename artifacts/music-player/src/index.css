@@ -54,6 +54,11 @@
 }
 
 :root {
+  /* Dynamic theme colors — animated via requestAnimationFrame in use-theme-colors.tsx */
+  --dyn-v: 103 80 164;    /* vibrant */
+  --dyn-d: 18 14 30;      /* dark */
+  --dyn-m: 55 42 95;      /* mid */
+
   /* Material 3 Deep Purple Theme */
   --primary: 256 34% 48%; /* #6750A4 */
   --primary-foreground: 0 0% 100%; /* #FFFFFF */
@@ -170,5 +175,24 @@
   }
   .m3-card:hover {
     @apply bg-surface-container;
+  }
+
+  /* Dynamic slider — fill/thumb use the current album's extracted color */
+  .dynamic-slider [role="slider"] {
+    background: rgb(var(--dyn-v)) !important;
+    border-color: rgb(var(--dyn-v)) !important;
+    box-shadow: 0 0 0 3px rgb(var(--dyn-v) / 0.25) !important;
+  }
+  .dynamic-slider [data-orientation="horizontal"] > span:first-child > span {
+    background: rgb(var(--dyn-v)) !important;
+  }
+
+  /* Hide scrollbar but keep scrollability */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

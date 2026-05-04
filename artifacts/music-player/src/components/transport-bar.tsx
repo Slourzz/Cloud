@@ -28,11 +28,11 @@ export function TransportBar() {
   return (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[min(860px,calc(100vw-2rem))]">
       <div
-        className="flex items-center gap-4 px-5 py-3 rounded-full elevation-3 border border-outline-variant/20"
+        className="flex items-center gap-4 px-5 py-3 rounded-full elevation-3 border border-outline-variant/15"
         style={{
           background: "hsl(var(--surface-container) / 0.88)",
-          backdropFilter: "blur(20px) saturate(1.6)",
-          WebkitBackdropFilter: "blur(20px) saturate(1.6)",
+          backdropFilter: "blur(24px) saturate(1.8)",
+          WebkitBackdropFilter: "blur(24px) saturate(1.8)",
         }}
       >
         {/* Album art + info */}
@@ -41,7 +41,7 @@ export function TransportBar() {
             src={currentSong.coverUrl}
             alt={currentSong.album}
             className={cn(
-              "w-11 h-11 rounded-xl object-cover shrink-0 transition-transform duration-700",
+              "w-11 h-11 rounded-xl object-cover shrink-0 transition-all duration-700",
               isPlaying ? "scale-100" : "scale-95 opacity-80"
             )}
           />
@@ -61,13 +61,12 @@ export function TransportBar() {
           <div className="flex items-center gap-1">
             <button
               onClick={toggleShuffle}
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-colors ripple",
-                isShuffle
-                  ? "text-primary bg-primary-container"
-                  : "text-on-surface-variant hover:bg-on-surface/8 hover:text-on-surface"
-              )}
               title="Aleatorio"
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-all ripple"
+              style={isShuffle ? {
+                background: `rgb(var(--dyn-v) / 0.18)`,
+                color: `rgb(var(--dyn-v))`,
+              } : { color: "hsl(var(--on-surface-variant))" }}
             >
               <Shuffle className="w-[14px] h-[14px]" strokeWidth={2.5} />
             </button>
@@ -82,8 +81,12 @@ export function TransportBar() {
 
             <button
               onClick={togglePlayPause}
-              className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center ripple elevation-1 hover:scale-105 transition-transform mx-1"
+              className="w-11 h-11 rounded-full flex items-center justify-center ripple text-white hover:scale-105 transition-transform mx-1 elevation-1"
               title={isPlaying ? "Pausar" : "Reproducir"}
+              style={{
+                background: `rgb(var(--dyn-v))`,
+                boxShadow: `0 4px 14px rgb(var(--dyn-v) / 0.45)`,
+              }}
             >
               {isPlaying ? (
                 <Pause className="w-5 h-5 fill-current" />
@@ -102,13 +105,12 @@ export function TransportBar() {
 
             <button
               onClick={toggleRepeat}
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-colors ripple",
-                isRepeat
-                  ? "text-primary bg-primary-container"
-                  : "text-on-surface-variant hover:bg-on-surface/8 hover:text-on-surface"
-              )}
               title="Repetir"
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-all ripple"
+              style={isRepeat ? {
+                background: `rgb(var(--dyn-v) / 0.18)`,
+                color: `rgb(var(--dyn-v))`,
+              } : { color: "hsl(var(--on-surface-variant))" }}
             >
               <Repeat className="w-[14px] h-[14px]" strokeWidth={2.5} />
             </button>
@@ -117,13 +119,12 @@ export function TransportBar() {
 
             <button
               onClick={() => toggleLike(currentSong.id)}
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-colors ripple",
-                isLiked
-                  ? "text-primary bg-primary-container"
-                  : "text-on-surface-variant hover:bg-on-surface/8 hover:text-on-surface"
-              )}
               title="Me gusta"
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-all ripple"
+              style={isLiked ? {
+                background: `rgb(var(--dyn-v) / 0.18)`,
+                color: `rgb(var(--dyn-v))`,
+              } : { color: "hsl(var(--on-surface-variant))" }}
             >
               <Heart
                 className="w-[14px] h-[14px]"
@@ -143,7 +144,7 @@ export function TransportBar() {
               max={currentSong.duration || 1}
               step={1}
               onValueChange={(v) => seek(v[0])}
-              className="flex-1 cursor-pointer"
+              className="flex-1 cursor-pointer dynamic-slider"
             />
             <span className="text-[10px] tabular-nums text-on-surface-variant w-7 shrink-0">
               {formatTime(currentSong.duration)}
@@ -168,7 +169,7 @@ export function TransportBar() {
             max={100}
             step={1}
             onValueChange={(v) => setVolume(v[0])}
-            className="flex-1 cursor-pointer"
+            className="flex-1 cursor-pointer dynamic-slider"
           />
         </div>
       </div>

@@ -60,6 +60,26 @@ interface MusicPlayerState {
 
 const MusicPlayerContext = createContext<MusicPlayerState | undefined>(undefined);
 
+async function searchItunesArtwork(title: string): Promise<string | null> {
+  try {
+    const clean = title.replace(/[^\w\s]/g, "").trim();
+    if (!clean) return null;
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&entity=musicTrack&limit=3&media=music`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.results?.length > 0) {
+      const art: string | undefined = data.results[0].artworkUrl100;
+      return art ? art.replace("100x100bb", "600x600bb") : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [currentSong, setCurrentSong] = useState<Song | null>(DEMO_SONGS[0]);
   const [queue, setQueue] = useState<Song[]>(DEMO_SONGS.slice(1));
@@ -114,10 +134,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const startCrossfade = (nextSong: Song) => {
     if (isCrossfadingRef.current) return;
     const cfSecs = crossfadeSecondsRef.current;
-    if (cfSecs === 0 || !nextSong.audioUrl) {
-      doNext();
-      return;
-    }
+    if (cfSecs === 0 || !nextSong.audioUrl) { doNext(); return; }
 
     isCrossfadingRef.current = true;
     const incoming = incomingAudioRef.current!;
@@ -150,7 +167,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         mainAudioRef.current.volume = startVol;
 
         attachAudioListeners();
-
         skipAudioSetupRef.current = true;
         const q = queueRef.current;
         setQueue([...q.slice(1), ...(cur ? [cur] : [])]);
@@ -166,12 +182,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (!audio) return;
     audio.onended = () => {
       if (!isCrossfadingRef.current) {
-        if (isRepeatRef.current) {
-          audio.currentTime = 0;
-          audio.play().catch(() => {});
-        } else {
-          doNext();
-        }
+        if (isRepeatRef.current) { audio.currentTime = 0; audio.play().catch(() => {}); }
+        else doNext();
       }
     };
     audio.ontimeupdate = () => {
@@ -188,10 +200,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mainAudioRef.current) return;
-    if (skipAudioSetupRef.current) {
-      skipAudioSetupRef.current = false;
-      return;
-    }
+    if (skipAudioSetupRef.current) { skipAudioSetupRef.current = false; return; }
     if (isCrossfadingRef.current) return;
 
     const audio = mainAudioRef.current;
@@ -215,26 +224,21 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mainAudioRef.current || !currentSong?.audioUrl) return;
-    if (isPlaying) {
-      mainAudioRef.current.play().catch(() => {});
-    } else {
-      mainAudioRef.current.pause();
-    }
+    if (isPlaying) mainAudioRef.current.play().catch(() => {});
+    else mainAudioRef.current.pause();
   }, [isPlaying]);
 
   useEffect(() => {
     if (mainAudioRef.current) mainAudioRef.current.volume = volume / 100;
   }, [volume]);
 
-  // Simulated playback for demo songs (no audioUrl)
   useEffect(() => {
     if (currentSong?.audioUrl) return;
     let interval: ReturnType<typeof setInterval>;
     if (isPlaying && currentSong) {
       interval = setInterval(() => {
         setProgress((p) => {
-          const dur = currentSong.duration;
-          if (p >= dur) {
+          if (p >= currentSong.duration) {
             if (isRepeat) return 0;
             setTimeout(() => doNext(), 0);
             return p;
@@ -256,20 +260,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const pause = () => setIsPlaying(false);
   const togglePlayPause = () => setIsPlaying((p) => !p);
-
   const next = () => doNext();
 
   const prev = () => {
-    if (progress > 3) {
-      setProgress(0);
-      if (currentSong?.audioUrl && mainAudioRef.current) {
-        mainAudioRef.current.currentTime = 0;
-      }
-    } else {
-      setProgress(0);
-      if (currentSong?.audioUrl && mainAudioRef.current) {
-        mainAudioRef.current.currentTime = 0;
-      }
+    setProgress(0);
+    if (currentSong?.audioUrl && mainAudioRef.current) {
+      mainAudioRef.current.currentTime = 0;
     }
   };
 
@@ -305,13 +301,14 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       const url = URL.createObjectURL(file);
       const name = file.name.replace(/\.[^/.]+$/, "");
       const audio = new Audio(url);
-      audio.addEventListener("loadedmetadata", () => {
+
+      const finalize = (dur: number) => {
         const newSong: Song = {
           id: `user-${Date.now()}-${Math.random()}`,
           title: name,
           artist: "Unknown Artist",
           album: "My Files",
-          duration: Math.floor(audio.duration) || 0,
+          duration: Math.floor(dur) || 0,
           coverUrl: "/album1.png",
           audioUrl: url,
           isUserUploaded: true,
@@ -319,28 +316,22 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         setUserSongs((prev) => [...prev, newSong]);
         addToQueue(newSong);
         resolve();
-      });
-      audio.addEventListener("error", () => {
-        const newSong: Song = {
-          id: `user-${Date.now()}-${Math.random()}`,
-          title: name,
-          artist: "Unknown Artist",
-          album: "My Files",
-          duration: 0,
-          coverUrl: "/album1.png",
-          audioUrl: url,
-          isUserUploaded: true,
-        };
-        setUserSongs((prev) => [...prev, newSong]);
-        addToQueue(newSong);
-        resolve();
-      });
+
+        // Async: search iTunes for artwork
+        searchItunesArtwork(name).then((artUrl) => {
+          if (!artUrl) return;
+          setUserSongs((prev) => prev.map((s) => s.id === newSong.id ? { ...s, coverUrl: artUrl } : s));
+          setCurrentSong((prev) => prev?.id === newSong.id ? { ...prev, coverUrl: artUrl } : prev);
+        });
+      };
+
+      audio.addEventListener("loadedmetadata", () => finalize(audio.duration));
+      audio.addEventListener("error", () => finalize(0));
     });
   };
 
   const setAudioQuality = (q: AudioQuality) => setAudioQualityState(q);
   const setCrossfadeSeconds = (s: number) => setCrossfadeSecondsState(s);
-
   const allSongs = [...DEMO_SONGS, ...userSongs];
 
   return (
