@@ -6,10 +6,10 @@ import { MusicPlayerProvider } from "@/hooks/use-music-player";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
 
-// Pages
 import Home from "@/pages/home";
 import Library from "@/pages/library";
 import Queue from "@/pages/queue";
+import Liked from "@/pages/liked";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +20,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/library" component={Library} />
         <Route path="/queue" component={Queue} />
+        <Route path="/liked" component={Liked} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
