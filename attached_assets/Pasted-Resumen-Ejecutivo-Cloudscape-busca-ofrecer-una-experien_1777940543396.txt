@@ -1,0 +1,281 @@
+Resumen Ejecutivo: Cloudscape busca ofrecer una experiencia de letras sincronizadas al estilo Apple Music: animaciones suaves (glow, fade, scroll), fondo dinámico basado en portada y portadas “vivas”. Para lograrlo, usaremos IA para generar archivos TTML/LRC a partir de la transcripción o audio, aplicando reglas específicas de tiempo (buffers de –50 ms al inicio, +100 ms al final, duración mínima 300–400 ms) y umbral de pausa de ~0.8–1.0 s. Además, implementaremos un flujo automático para obtener letras vía API (MusiXmatch, LyricFind) o scraping seguro, validando coincidencias por metadatos y emparejamiento difuso. Después, un algoritmo post-procesará el TTML: agrupa frases, extiende tiempos, elimina puntuación innecesaria y evita puntos suspensivos si la pausa <0.8 s. En la capa visual, definiremos especificaciones CSS/Canvas/WebGL para animar cada segmento: fundidos de 100–200 ms, glow en la línea activa, blur/parallax en el fondo y sincronización con beat via WebAudio
+. Legalmente, usaremos sólo fuentes de letras licenciadas: MusiXmatch o LyricFind (otras como Genius/ AZLyrics no autorizadas
+). Las herramientas clave incluyen Vibrant.js (extracción de colores
+), WebAudio API
+, Howler.js
+, FFmpeg o WebCodecs, Node-ID3 para metadatos
+, y Electron/Tauri. Se establecerán métricas de calidad (saltos <2%, latencia <0.2 s, palabras perdidas <1%) y pruebas A/B comparando con referentes. A continuación se detallan los pasos, flujos, código de ejemplo y consideraciones.
+
+Formato TTML/LRC y reglas de sincronización
+Cloudscape deberá manejar tanto TTML (XML avanzado de subtítulos) como LRC (formato simple de letras). El TTML permite estilos detallados, ideal para animaciones complejas, mientras LRC es más simple (formatos [mm:ss.xx]Texto) y compatible con visores básicos
+. Usaremos Enhanced LRC con tiempos a nivel de palabra para destaque karaoke
+.
+
+Las reglas de sincronización incluyen:
+
+Buffers: extender cada segmento con –50 ms al inicio y +100 ms al final para transiciones suaves.
+Duración mínima: imponer ~0.3–0.4 s por línea, evitando parpadeos rápidos
+.
+Umbral de pausa: si el silencio entre frases es ≥0.8–1.0 s, se puede añadir “…” o pausa visual; si es menor, evitamos puntos excesivos para no cortar flujo natural.
+Sincronización previa: según buenas prácticas de captions, hacer que el texto aparezca ~0.5–1 s antes de la palabra cantada
+.
+Animaciones: transición de opacidad de 100–200 ms para entradas/salidas
+, easing suave (CSS ease), y timeline bien alineado con el audio.
+Por ejemplo, un TTML válido para una línea podría ser: <p begin="00:00:12.450" end="00:00:16.300">Texto de la letra</p>. Y el LRC asociado: [00:12.45]Texto de la letra.
+
+Prompt final para IA (en español)
+El siguiente prompt en español está diseñado para modelos LLM (ChatGPT-4, Claude, etc.) y genera tanto TTML como LRC optimizado para Cloudscape:
+
+Prompt (en español):
+“Eres un generador de letras sincronizadas. Recibes una transcripción de una canción (o archivo de audio) y debes devolver un bloque TTML y un archivo LRC sincronizados. Aplica las siguientes reglas: cada segmento de letras debe incluir marcas de tiempo begin y end; extiende 50 ms antes y 100 ms después de cada frase para suavizar la entrada/salida; impón una duración mínima de 300 ms por segmento; evita agregar puntos suspensivos si la pausa anterior fue menor a 0.8 s, y solo inclúyelos si la pausa es de 0.8–1.0 s o más. Formatea en salida TTML (XML válido dentro de <tt><body><div><p>...</p></div></body></tt>) y LRC ([mm:ss.xxx]texto). Asegúrate de que las palabras clave coincidan y que LRC y TTML contengan las mismas líneas con tiempos correspondidos.”
+
+Ejemplo de entrada→salida:
+
+Entrada: transcripción: “Hola, ¿cómo estás? Esto es una prueba.” (duraciones ficticias)
+Salida TTML: <tt><body><div><p begin="00:00:00.000" end="00:00:02.000">Hola, ¿cómo estás?</p><p begin="00:00:02.200" end="00:00:04.000">Esto es una prueba.</p></div></body></tt>
+Salida LRC: [00:00.000]Hola, ¿cómo estás?
+[00:02.200]Esto es una prueba.
+Este prompt incluye reglas claras (buffers, duraciones, formato) para guiar a la IA.
+
+Flujo de búsqueda de letras
+Para obtener letras legalmente, se implementará el siguiente flujo automático:
+
+Extracción de metadatos: Leer ID3 del audio (título, artista) con node-id3
+.
+
+Búsqueda por API licenciada: Intentar primero con Musixmatch (token de desarrollador). Usar endpoint /matcher.lyrics.get o /track.lyrics.get con track_id
+. Ejemplo (Node/Fetch):
+
+js
+Copiar
+const res = await fetch(`https://api.musixmatch.com/ws/1.1/matcher.lyrics.get?q_track=${encodeURIComponent(titulo)}&q_artist=${encodeURIComponent(artista)}&apikey=API_KEY`);
+const data = await res.json();
+if (data.message.body.lyrics) {
+  lyrics = data.message.body.lyrics.lyrics_body;
+}
+Según Musixmatch, es la fuente de letras con licencia para apps (empleada por Spotify, Apple, etc.)
+.
+
+Búsqueda secundaria: Si Musixmatch no devuelve letra completa, intentar LyricFind (API comercial similar) o fallback.
+
+Scraping seguro: Como último recurso, buscar en fuentes públicas reconocidas (Genius, AZLyrics) sólo si se tiene consentimiento, o pedir al usuario que inserte la letra manualmente. Nota: Genius no permite reutilizar letras sin licencia
+, así que esto es riesgoso.
+
+Validación de coincidencias: Tras obtener letra candidata, hacer fuzzy match con título/artista (por ejemplo utilizando string-similarity) para asegurar que coincide con la canción. Opcional: usar fingerprint de audio (AcoustID) para validar el track.
+
+Sincronización IA: Con la letra final, se alimenta al modelo IA (prompt anterior) para generar TTML/LRC.
+
+Almacenamiento: Guardar letra en base de datos local para evitar futuras búsquedas.
+
+Este flujo privilegia fuentes autorizadas: “lo legal es Musixmatch/LyricFind”
+.
+
+Post-procesamiento TTML (algoritmo/pseudocódigo)
+Tras la generación de TTML/LRC, se aplica un post-procesamiento para pulir tiempos. El pseudocódigo podría ser:
+
+js
+Copiar
+function postProcesarTTML(ttml) {
+  // Parsear XML (usar DOMParser o xml2js)
+  for each <p> en ttml:  
+    let begin = parseTime(p.getAttribute('begin'));  
+    let end   = parseTime(p.getAttribute('end'));  
+
+    // Aplicar buffers
+    begin = Math.max(0, begin - 50);  
+    end   = end + 100;  
+
+    // Duración mínima
+    if (end - begin < 300) {
+      end = begin + 300;
+    }
+
+    // Evitar puntos por pausas cortas
+    if (prevEnd) {
+      let pausa = begin - prevEnd;
+      if (pausa < 800) {
+        // eliminar puntos suspensivos al final de la línea anterior
+        prevP.innerHTML = prevP.innerHTML.replace(/\.\.\.$/, '');
+      }
+    }
+
+    // Actualizar atributos
+    p.setAttribute('begin', formatTime(begin));  
+    p.setAttribute('end', formatTime(end));  
+
+    prevEnd = end; prevP = p;
+  }
+  // Reconstruir texto LRC con nuevos tiempos
+  let lrc = '';
+  for each <p> { lrc += `[${formatTime(p.begin)}]${p.textContent}\n`; }
+  return { ttml: ttml.toString(), lrc };
+}
+Este algoritmo:
+
+Agrupa frases naturales en cada <p>.
+Añade buffers de –50/+100 ms (min 0 ms).
+Impone 300–400 ms si la duración es menor.
+Elimina “…” de la línea anterior si la pausa fue <0.8 s.
+Convierte finalmente el TTML modificado a cadena y genera el LRC alineado.
+Estos pasos suavizan saltos: por ejemplo, según estándares de captions, la transición ideal es ~100–200 ms fade
+; aquí aseguramos margen suficiente para esos fundidos.
+
+Especificaciones de animación (CSS/Canvas/WebGL)
+Para un efecto al estilo Apple Music, cada segmento de letra se animará con:
+
+Fade in/out: usar opacity con transiciones de ~0.15–0.2 s y easing suave (ease-out).
+Glow: al resaltar, aplicar text-shadow pulsante. Por ejemplo:
+css
+Copiar
+.lyric-line.active {
+  animation: glow 2s infinite alternate;
+}
+@keyframes glow {
+  from { text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+  to   { text-shadow: 0 0 30px rgba(0,200,255,0.8); }
+}
+Desplazamiento (scroll): mover la línea activa al centro con transform: translateY(), animado concurrentemente con opacity.
+Fondo dinámico: usar un elemento <canvas> o CSS background-image blurred. Extraer colores clave de la portada con Vibrant.js
+ y crear un gradient difuso. Luego animar el cambio de colores lentamente (utilizar WebGL o Canvas para efectos de partícula sutil acorde al beat).
+Por ejemplo, en JavaScript con WebAudio API
+se puede obtener el beat y variar la intensidad de blur o partículas. Un fragmento de CSS para el fondo:
+
+css
+Copiar
+.player-background {
+  position: absolute; top:0; left:0; right:0; bottom:0;
+  background: linear-gradient(to top, var(--color1), var(--color2));
+  filter: blur(20px);
+  transition: background 1s ease;
+}
+Finalmente, cada segmento <p> del TTML se mapea a estos estilos: cuando begin es alcanzado, esa línea recibe la clase .active hasta end, disparando las animaciones (fade y glow). Un timeline en Mermaid (conceptual) podría ser:
+
+mermaid
+Copiar
+sequenceDiagram
+    participante UI
+    participante IA
+    participante MPD
+
+    UI->>MPD: Solicita letra y sincronización
+    MPD->>IA: Envia texto+reglas
+    IA-->>MPD: Devuelve TTML/LRC optimizado
+    MPD->>UI: Post-procesa y aplica animaciones CSS/WebGL
+    UI->>Usuario: Muestra letras con animación fluida
+En resumen, usamos CSS (opacity, transform, text-shadow) y técnicas gráficas (WebGL, partículas) para que cada línea aparezca “flotando” con glow y scroll suave, emulando el estilo cinematográfico de Apple Music.
+
+Consideraciones legales para letras
+Las letras están sujetas a derechos de autor. Como indica Musixmatch, “no se puede mostrar letras comerciales sin acuerdo con las editoriales”
+. Por ello:
+
+Musixmatch/LyricFind: Son servicios con licencias establecidas. Citar: “MusiXmatch is the world’s largest legal lyrics catalog… If you want to show lyrics without violating copyrights, MusiXmatch is one of the few legal options”
+. Apple, Spotify, etc. las usan
+.
+APIs gratuitas tipo Genius/AZLyrics: No ofrecen derechos de reproducción. De hecho Genius “won’t allow you to re-use their lyrics without explicit licensing”
+. Usarlas puede infringir Terminos.
+Uso seguro: Limitar a APIS con licencia o contenido ingresado por el usuario. Mostrar créditos en la app. Cumplir DMCA en web.
+Herramientas y librerías recomendadas
+Extracción de colores: Vibrant.js (o node-vibrant) para obtener paleta principal de la portada
+.
+Audio: Web Audio API (AnalyserNode) para detectar ritmos y frecuencias
+. Howler.js para reproducción cross-platform
+.
+Procesamiento de audio: FFmpeg o WebCodecs para decodificar formatos y extraer metadatos.
+Metadatos MP3: node-id3 para leer etiquetas (título, artista, carátula)
+.
+Sincronización: LLMs (GPT-4, Claude) para generación inicial. Libros de sincronización (por ejemplo lyricsgenius NPM) como fallback.
+Tiempos y parsing: Librerías TTML/LRC (por ejemplo ttml2js, subtitle.js) para analizar y escribir.
+UI/Electron: Electron o Tauri para versión desktop. React/Vue para la interfaz.
+Visualización: Librerías WebGL (Three.js, Pixi.js) para efectos avanzados. GreenSock (GSAP) para animaciones complejas si se desea.
+Dependencias adicionales: string-similarity para fuzzy match, fingerprintjs para audio fingerprint (opcional).
+La prioridad es primero crear prototipos UI (Figma, React) y luego conectar las API/licencias. Vibrant/WebAudio/Howler son herramientas clave para dar la experiencia “premium” mencionada.
+
+Pruebas y métricas de calidad
+Para evaluar la sincronización y experiencia:
+
+Criterios de salto: <2% de palabras “saltadas” (no mostradas).
+Latencia de sincronización: <200 ms retardo entre audio y letra.
+Precisión del timing: max. ±100 ms error respecto a audición humana.
+Métricas de fiabilidad: usar test A/B: por ejemplo, comparar un grupo con letras generadas con y sin buffers. Medir la comprensibilidad (encuestas) y el número de re-procesos (cantidad de ajustes manuales).
+Pruebas unitarias: para el algoritmo de post-procesado (grupos de tiempos simulados).
+Feedback usuario: registro anónimo de scrubs/backtracks por problemas de sincronización.
+Estos datos guiarán ajustes (por ejemplo, ajustar el umbral de 0.8s, buffers) para asegurar una experiencia fluida.
+
+Fuentes de letras: comparación
+Fuente / API	Tipo	Licencia	Costo	Cobertura & Limitaciones	Ejemplo de request/response
+Musixmatch	API (REST)	Licenciada	Gratis limitado*	+20M canciones, sin sincronía full gratis; 30% letra gratis, full con pago
+GET ws/1.1/matcher.lyrics.get?apikey=KEY&q_track=Título&q_artist=Artista <br> → JSON con "lyrics_body": "Letra..."
+LyricFind	API (REST)	Licenciada	Pago (enterprise)	+14M canciones; licencias globales; buen for web apps (licencia web).	Similar a Musixmatch (requiere cuenta).
+Genius	API pública + Scrape	No para uso comercial
+Gratis (sólo metadata)	+1.7M canciones; API oficial no incluye letras; sin licencia de letras
+GET api.genius.com/search?access_token=KEY&q=Título → resultados de canción. Letras sólo vía web-scrape.
+ChartLyrics	API (REST)	Desconocido (no oficial)	Gratis	Base pequeña (millones?), no actualizada frecuentemente.	http://api.chartlyrics.com/apiv1.asmx/SearchLyric?artist=…&song=… (XML)
+Lyrics.ovh	API pública	No licenciado	Gratis	Cobertura limitada, sin garantía (usa contenido de web).	GET https://api.lyrics.ovh/v1/Artista/Título → JSON con "lyrics": "...".
+Usuario (manual)	N/A	N/A	Gratis	Siempre disponible, pero requiere input manual.	-
+
+(*) La versión free de Musixmatch da hasta 2.000 requests/día y solo fragmentos de lyrics
+; para full lyrics se negocia plan comercial. En definitiva, solo Musixmatch/LyricFind ofrecen letras legalmente; las demás son “fallas” usables sólo con permiso explícito.
+
+Resumen de implementación y pasos accionables
+Diseño UI/UX: maquetar el reproductor Cloudscape en web/Electron (HTML/CSS con paleta oscura+azul).
+Back-end letras: registrar en Musixmatch, obtener API key. Implementar módulo Node.js de consulta (fetch/axios) de letras.
+IA de sincronización: configurar modelo LLM (p.ej. via OpenAI API). Preparar prompt (ver arriba) y API call en Node.js. Ejemplo:
+js
+Copiar
+const { Configuration, OpenAIApi } = require("openai");
+const openai = new OpenAIApi(new Configuration({ apiKey: "KEY" }));
+const completion = await openai.createChatCompletion({
+  model: "gpt-4",
+  messages: [
+    { role: "system", content: "Genera TTML y LRC sincronizados..." },
+    { role: "user", content: "Letra de la canción (texto)..."} 
+  ]
+});
+const result = completion.data.choices[0].message.content;
+Post-procesado: aplicar pseudocódigo anterior para ajustar tiempos (Node.js/XML parsing).
+Render animado: en el frontend (React/Electron), parsear TTML en elementos <p> posicionados; usar CSS animaciones. Por ejemplo, al recibir un <p>, agregarlo al DOM con clases .lyric-line, y activar .active según el begin. Un fragmento de CSS:
+css
+Copiar
+.lyric-line { opacity: 0; transition: opacity 0.2s ease; }
+.lyric-line.active { opacity: 1; } 
+.background { filter: blur(20px); transition: background 1s ease; }
+Pruebas y ajuste: comparar con letras sincronizadas manuales (benchmark), medir métricas.
+Lanzamiento: tras pruebas internas, publicar la app en Windows/Mac (Electron) y demo web, destacando acceso libre a tu música local con experiencia premium.
+Código de ejemplo resumido (Node.js): búsqueda de letra y post-procesado TTML.
+
+js
+Copiar
+const fetch = require('node-fetch');
+const parse = require('fast-xml-parser');
+
+// Obtener letra por Musixmatch
+async function getLyrics(title, artist) {
+  const url = `https://api.musixmatch.com/ws/1.1/matcher.lyrics.get?apikey=KEY&q_track=${title}&q_artist=${artist}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.message?.body?.lyrics?.lyrics_body || '';
+}
+
+// Llamar IA para TTML (usando openai/lib)
+async function generarTTML(lyricsText) {
+  const completion = await openai.createChatCompletion({
+    model: "gpt-4",
+    messages: [
+      { role: "system", content: "Genera TTML y LRC según reglas dadas..." },
+      { role: "user", content: lyricsText }
+    ]
+  });
+  return completion.data.choices[0].message.content;
+}
+
+// Post-procesar TTML (como pseudocódigo anterior)
+function postProcesar(tsmlXml) {
+  let tt = parse(tsmlXml);
+  // ... aplicar buffers y duración mínima ...
+  // ...
+  return { ttml: newXmlString, lrc: generatedLrcText };
+}
+Con estos pasos y ejemplos, Cloudscape tendrá letras sincronizadas de alta calidad y animaciones “de otro nivel”. Cada elemento – desde el prompt de IA hasta el render final – sigue criterios técnicos sólidos, citando estándares (p.ej. timing captions
+) y utilizando herramientas especializadas (Vibrant
+, Howler
+, etc.) para una implementación coherente y legal.
