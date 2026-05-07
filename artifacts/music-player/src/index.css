@@ -51,36 +51,39 @@
   --radius-lg: 16px;
   --radius-xl: 28px;
   --radius-full: 9999px;
+
+  /* Easing curves */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root {
-  /* Dynamic theme colors — animated via requestAnimationFrame in use-theme-colors.tsx */
-  --dyn-v: 10 132 255;    /* vibrant — iOS blue default */
-  --dyn-d: 0 18 52;       /* dark */
-  --dyn-m: 5 65 140;      /* mid */
+  --dyn-v: 10 132 255;
+  --dyn-d: 0 18 52;
+  --dyn-m: 5 65 140;
 
-  /* Material 3 Blue Theme */
-  --primary: 211 100% 52%; /* #0A84FF — iOS Blue */
+  --primary: 211 100% 52%;
   --primary-foreground: 0 0% 100%;
-  --primary-container: 211 100% 93%; /* #E1F0FF */
-  --on-primary-container: 211 100% 20%; /* #003366 */
+  --primary-container: 211 100% 93%;
+  --on-primary-container: 211 100% 20%;
 
-  --secondary: 213 18% 42%; /* blue-gray */
+  --secondary: 213 18% 42%;
   --secondary-foreground: 0 0% 100%;
-  --secondary-container: 213 46% 91%; /* #DDE8F5 */
-  --on-secondary-container: 213 40% 14%; /* #102235 */
+  --secondary-container: 213 46% 91%;
+  --on-secondary-container: 213 40% 14%;
 
-  --tertiary: 197 52% 42%; /* teal */
+  --tertiary: 197 52% 42%;
   --tertiary-foreground: 0 0% 100%;
-  --tertiary-container: 197 100% 91%; /* #D0F4FF */
-  --on-tertiary-container: 197 100% 13%; /* #003340 */
+  --tertiary-container: 197 100% 91%;
+  --on-tertiary-container: 197 100% 13%;
 
   --error: 358 65% 42%;
   --error-foreground: 0 0% 100%;
   --error-container: 358 68% 92%;
   --on-error-container: 356 71% 15%;
 
-  --surface: 210 50% 99%; /* #F7FAFF — slightly blue-tinted white */
+  --surface: 210 50% 99%;
   --on-surface: 213 20% 12%;
   --surface-variant: 210 28% 90%;
   --on-surface-variant: 213 10% 34%;
@@ -102,17 +105,17 @@
 }
 
 .dark {
-  --primary: 211 100% 68%; /* #5EB2FF — lighter blue for dark bg */
+  --primary: 211 100% 68%;
   --primary-foreground: 211 100% 10%;
-  --primary-container: 211 88% 22%; /* #073A72 */
-  --on-primary-container: 211 100% 90%; /* #C8E4FF */
+  --primary-container: 211 88% 22%;
+  --on-primary-container: 211 100% 90%;
 
   --secondary: 213 20% 70%;
   --secondary-foreground: 213 20% 12%;
   --secondary-container: 213 20% 28%;
   --on-secondary-container: 213 30% 88%;
 
-  --surface: 213 30% 7%; /* #0C111A — deep blue-black */
+  --surface: 213 30% 7%;
   --on-surface: 210 18% 90%;
   --surface-variant: 213 14% 22%;
   --on-surface-variant: 210 12% 72%;
@@ -139,9 +142,34 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
   }
+
+  /* Smoother text rendering */
+  * {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ── Global button press feel ── */
+@layer base {
+  button {
+    transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 120ms ease,
+                background-color 150ms ease,
+                box-shadow 200ms ease,
+                color 150ms ease;
+  }
+  button:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+  a {
+    transition: opacity 150ms ease, color 150ms ease;
+  }
 }
 
 @layer utilities {
+  /* ── Ripple press effect ── */
   .ripple {
     position: relative;
     overflow: hidden;
@@ -152,58 +180,176 @@
     inset: 0;
     background-color: currentColor;
     opacity: 0;
-    transition: opacity 0.2s;
+    border-radius: inherit;
+    transition: opacity 200ms ease;
     pointer-events: none;
   }
+  .ripple:hover::after {
+    opacity: 0.04;
+  }
   .ripple:active::after {
-    opacity: 0.12;
+    opacity: 0.10;
+    transition: opacity 60ms ease;
   }
 
+  /* ── Elevations ── */
   .elevation-1 {
-    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.25), 0px 1px 3px 1px rgba(0, 0, 0, 0.12);
   }
   .elevation-2 {
-    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.25), 0px 2px 6px 2px rgba(0, 0, 0, 0.12);
   }
   .elevation-3 {
-    box-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.30), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+    box-shadow: 0px 2px 4px 0px rgba(0, 0, 0, 0.25), 0px 6px 14px 4px rgba(0, 0, 0, 0.12);
   }
 
+  /* ── Cards ── */
   .m3-card {
-    @apply bg-surface-low rounded-[12px] border border-transparent transition-colors duration-200;
+    @apply bg-surface-low rounded-[12px] border border-transparent;
+    transition: background-color 200ms ease, box-shadow 200ms ease, transform 200ms cubic-bezier(0.34,1.56,0.64,1);
   }
   .m3-card:hover {
     @apply bg-surface-container;
   }
 
-  /* Dynamic slider — fill/thumb follow the album color (Radix UI structure) */
+  /* ── Dynamic slider ── */
   .dynamic-slider [role="slider"] {
     background: rgb(var(--dyn-v)) !important;
     border-color: rgb(var(--dyn-v)) !important;
-    box-shadow: 0 0 0 3px rgb(var(--dyn-v) / 0.28) !important;
+    box-shadow: 0 0 0 3px rgb(var(--dyn-v) / 0.22) !important;
+    transition: box-shadow 200ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1) !important;
   }
-  /* Track background */
+  .dynamic-slider [role="slider"]:hover {
+    transform: scale(1.18) !important;
+    box-shadow: 0 0 0 5px rgb(var(--dyn-v) / 0.28) !important;
+  }
   .dynamic-slider [data-radix-slider-track] {
-    background: rgb(var(--dyn-v) / 0.2) !important;
+    background: rgb(var(--dyn-v) / 0.18) !important;
   }
-  /* Filled range */
   .dynamic-slider [data-radix-slider-range] {
     background: rgb(var(--dyn-v)) !important;
   }
-  /* Fallback for shadcn/ui Slider (no data attrs) — nth-child targeting */
   .dynamic-slider > span > span:first-child {
-    background: rgb(var(--dyn-v) / 0.2) !important;
+    background: rgb(var(--dyn-v) / 0.18) !important;
   }
   .dynamic-slider > span > span:first-child > span {
     background: rgb(var(--dyn-v)) !important;
   }
 
-  /* Hide scrollbar but keep scrollability */
+  /* ── Scrollbar hide ── */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* ── Page transitions ── */
+  .page-enter {
+    animation: page-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Stagger list items ── */
+  .stagger-item {
+    animation: stagger-in 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes stagger-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Slide up ── */
+  .slide-up {
+    animation: slide-up 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ── Fade scale in ── */
+  .fade-scale-in {
+    animation: fade-scale-in 240ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes fade-scale-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  /* ── Album art glow pulse when playing ── */
+  .art-playing {
+    animation: art-glow 3.5s ease-in-out infinite alternate;
+  }
+  @keyframes art-glow {
+    from { box-shadow: 0 28px 70px rgb(var(--dyn-d) / 0.50), 0 0 0 1px rgb(var(--dyn-v) / 0.08); }
+    to   { box-shadow: 0 36px 90px rgb(var(--dyn-d) / 0.70), 0 0 40px rgb(var(--dyn-v) / 0.18); }
+  }
+
+  /* ── Play button pulse ── */
+  .play-pulse {
+    animation: play-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes play-pulse {
+    0%, 100% { box-shadow: 0 4px 18px rgb(var(--dyn-v) / 0.5), 0 0 0 0 rgb(var(--dyn-v) / 0.3); }
+    50%       { box-shadow: 0 4px 22px rgb(var(--dyn-v) / 0.65), 0 0 0 8px rgb(var(--dyn-v) / 0); }
+  }
+
+  /* ── Nav item active indicator ── */
+  .nav-active-dot {
+    animation: dot-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes dot-in {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
+  /* ── Waveform bars dancing ── */
+  @keyframes waveform {
+    0%, 100% { transform: scaleY(0.4); }
+    50%      { transform: scaleY(1); }
+  }
+
+  /* ── Lyrics bounce dots ── */
+  @keyframes lyric-dot-bounce {
+    0%   { transform: translateY(0px);   opacity: 0.4; }
+    35%  { transform: translateY(-12px); opacity: 1;   }
+    65%  { transform: translateY(-12px); opacity: 1;   }
+    100% { transform: translateY(0px);   opacity: 0.4; }
+  }
+
+  /* ── Shimmer loading ── */
+  .shimmer {
+    background: linear-gradient(90deg,
+      hsl(var(--surface-high)) 25%,
+      hsl(var(--surface-highest)) 50%,
+      hsl(var(--surface-high)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Icon button base — smooth transition ── */
+  .icon-btn {
+    @apply flex items-center justify-center rounded-full transition-all duration-150 select-none;
+    transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 150ms ease,
+                box-shadow 200ms ease,
+                color 150ms ease,
+                opacity 150ms ease;
+  }
+  .icon-btn:hover {
+    transform: scale(1.06);
+  }
+  .icon-btn:active {
+    transform: scale(0.92);
   }
 }

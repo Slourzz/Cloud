@@ -22,6 +22,34 @@ function formatTime(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+function FsIconBtn({
+  onClick, active, disabled, title, children, className, style,
+}: {
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  title?: string;
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        "icon-btn text-white disabled:opacity-40 ripple",
+        active ? "bg-white/18" : "hover:bg-white/12",
+        className
+      )}
+      style={style}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
   const {
     currentSong, isPlaying, progress, volume, isShuffle, isRepeat, likedSongs,
@@ -44,7 +72,7 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
     if (open) {
       setVisible(true);
     } else {
-      const t = setTimeout(() => setVisible(false), 400);
+      const t = setTimeout(() => setVisible(false), 450);
       return () => clearTimeout(t);
     }
   }, [open]);
@@ -99,10 +127,8 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
         }),
       });
       const data = await res.json().catch(() => ({})) as { ttml?: string; error?: string };
-      if (!res.ok || data.error === "lyrics_not_found") {
-        throw new Error("lyrics_not_found");
-      }
-      if (!res.ok || !data.ttml) throw new Error("server_error");
+      if (!res.ok || data.error === "lyrics_not_found") throw new Error("lyrics_not_found");
+      if (!data.ttml) throw new Error("server_error");
       loadTTML(songId, data.ttml);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al generar";
@@ -121,35 +147,40 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex flex-col transition-all duration-500",
-        open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6 pointer-events-none"
+        "fixed inset-0 z-50 flex flex-col",
+        "transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        open ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-[0.99] pointer-events-none"
       )}
       style={fullscreenBg()}
     >
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 pt-6 pb-4 shrink-0">
-        <button
+        <FsIconBtn
           onClick={onClose}
-          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-white"
+          title="Cerrar"
+          className="w-10 h-10"
         >
           <ChevronDown className="w-5 h-5" />
-        </button>
-        <div className="text-center">
-          <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Reproduciendo</p>
+        </FsIconBtn>
+
+        <div className="text-center select-none">
+          <p className="text-white/55 text-xs font-bold uppercase tracking-widest">Reproduciendo</p>
           {currentSong && (
             <p className="text-white/80 text-sm font-semibold truncate max-w-sm mt-0.5">
               {currentSong.album}
             </p>
           )}
         </div>
-        <button
+
+        <FsIconBtn
           onClick={() => setShowLyricsPanel((v) => !v)}
-          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-          style={{ color: showLyricsPanel ? rgb("v") : "rgba(255,255,255,0.6)" }}
           title="Letras"
+          active={showLyricsPanel}
+          className="w-10 h-10"
+          style={{ color: showLyricsPanel ? rgb("v") : "rgba(255,255,255,0.6)" }}
         >
           <FileText className="w-4 h-4" />
-        </button>
+        </FsIconBtn>
       </div>
 
       {/* Main content */}
@@ -157,76 +188,99 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
         {/* Left: album art + info + controls */}
         <div
           className={cn(
-            "flex flex-col items-center justify-center p-8 transition-all duration-500",
+            "flex flex-col items-center justify-center p-8",
+            "transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
             showLyricsPanel ? "w-1/2" : "w-full"
           )}
         >
           {/* Album art */}
           <div
+            key={currentSong?.id}
             className={cn(
-              "rounded-[28px] overflow-hidden transition-all duration-700 mb-8",
-              isPlaying ? "scale-100" : "scale-95"
+              "rounded-[28px] overflow-hidden mb-8 fade-scale-in",
             )}
             style={{
               width: showLyricsPanel ? "min(300px, 40vw)" : "min(420px, 50vw)",
               aspectRatio: "1",
-              boxShadow: `0 30px 80px rgb(var(--dyn-d) / 0.7), 0 0 0 1px rgba(255,255,255,0.08)`,
+              boxShadow: isPlaying
+                ? `0 32px 90px rgb(var(--dyn-d) / 0.75), 0 0 0 1px rgba(255,255,255,0.07)`
+                : `0 20px 60px rgb(var(--dyn-d) / 0.55), 0 0 0 1px rgba(255,255,255,0.05)`,
+              transform: isPlaying ? "scale(1)" : "scale(0.94)",
+              transition: "transform 700ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 700ms ease, width 500ms cubic-bezier(0.16,1,0.3,1)",
             }}
           >
             <img
               src={currentSong?.coverUrl ?? "/album1.png"}
               alt={currentSong?.album}
               className="w-full h-full object-cover"
+              style={{
+                transform: isPlaying ? "scale(1.03)" : "scale(1)",
+                transition: "transform 700ms cubic-bezier(0.34,1.56,0.64,1)",
+              }}
             />
           </div>
 
           {/* Song info */}
-          <div className="text-center mb-8 w-full max-w-sm">
+          <div
+            key={currentSong?.id + "-fs-info"}
+            className="text-center mb-8 w-full max-w-sm stagger-item select-none"
+          >
             <h1 className="text-3xl font-bold text-white leading-tight mb-2 truncate">
               {currentSong?.title ?? "—"}
             </h1>
-            <p className="text-white/70 text-lg truncate">{currentSong?.artist}</p>
+            <p className="text-white/65 text-lg truncate stagger-item" style={{ animationDelay: "50ms" }}>
+              {currentSong?.artist}
+            </p>
           </div>
 
           {/* Playback controls */}
           <div className="flex flex-col items-center gap-4 w-full max-w-sm">
             <div className="flex items-center gap-3">
-              <button
-                onClick={toggleShuffle}
-                className={cn(
-                  "w-9 h-9 rounded-full flex items-center justify-center transition-all",
-                  isShuffle ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80 hover:bg-white/10"
-                )}
-              >
+              <FsIconBtn onClick={toggleShuffle} active={isShuffle} className="w-9 h-9">
                 <Shuffle className="w-4 h-4" />
-              </button>
-              <button onClick={prev} className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-all">
+              </FsIconBtn>
+
+              <FsIconBtn onClick={prev} className="w-11 h-11">
                 <SkipBack className="w-6 h-6 fill-current" />
-              </button>
+              </FsIconBtn>
+
               <button
                 onClick={togglePlayPause}
-                className="w-16 h-16 rounded-full flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95"
-                style={{ background: rgb("v", 0.9), boxShadow: `0 8px 30px ${rgb("v", 0.4)}` }}
+                className={cn("icon-btn w-16 h-16 text-white", isPlaying && "play-pulse")}
+                style={{
+                  background: rgb("v", 0.9),
+                  boxShadow: isPlaying
+                    ? `0 8px 30px ${rgb("v", 0.5)}`
+                    : `0 4px 16px ${rgb("v", 0.3)}`,
+                }}
               >
-                {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 fill-current ml-1" />}
+                <span
+                  className="flex items-center justify-center"
+                  style={{
+                    transition: "transform 200ms cubic-bezier(0.34,1.56,0.64,1)",
+                    transform: isPlaying ? "scale(1)" : "scale(1.08)",
+                  }}
+                >
+                  {isPlaying
+                    ? <Pause className="w-7 h-7 fill-current" />
+                    : <Play className="w-7 h-7 fill-current ml-1" />}
+                </span>
               </button>
-              <button onClick={next} className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-all">
+
+              <FsIconBtn onClick={next} className="w-11 h-11">
                 <SkipForward className="w-6 h-6 fill-current" />
-              </button>
-              <button
-                onClick={toggleRepeat}
-                className={cn(
-                  "w-9 h-9 rounded-full flex items-center justify-center transition-all",
-                  isRepeat ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80 hover:bg-white/10"
-                )}
-              >
+              </FsIconBtn>
+
+              <FsIconBtn onClick={toggleRepeat} active={isRepeat} className="w-9 h-9">
                 <Repeat className="w-4 h-4" />
-              </button>
+              </FsIconBtn>
             </div>
 
             {/* Progress */}
             <div className="flex items-center gap-3 w-full">
-              <span className="text-white/60 text-xs tabular-nums w-8 text-right">{formatTime(progress)}</span>
+              <span className="text-white/55 text-xs tabular-nums w-8 text-right select-none">
+                {formatTime(progress)}
+              </span>
               <Slider
                 value={[progress]}
                 max={currentSong?.duration || 1}
@@ -234,12 +288,14 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
                 onValueChange={(v) => seek(v[0])}
                 className="flex-1 [--slider-thumb:white] [--slider-track:rgba(255,255,255,0.2)] [--slider-range:white]"
               />
-              <span className="text-white/60 text-xs tabular-nums w-8">{formatTime(currentSong?.duration ?? 0)}</span>
+              <span className="text-white/55 text-xs tabular-nums w-8 select-none">
+                {formatTime(currentSong?.duration ?? 0)}
+              </span>
             </div>
 
             {/* Volume + Like */}
             <div className="flex items-center gap-3 w-full">
-              <Volume2 className="w-4 h-4 text-white/60 shrink-0" />
+              <Volume2 className="w-4 h-4 text-white/50 shrink-0" />
               <Slider
                 value={[volume]}
                 max={100}
@@ -247,140 +303,146 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
                 onValueChange={(v) => setVolume(v[0])}
                 className="flex-1"
               />
-              <button
+              <FsIconBtn
                 onClick={() => toggleLike(songId)}
-                className={cn(
-                  "w-9 h-9 rounded-full flex items-center justify-center transition-all ml-2",
-                  isLiked ? "text-white bg-white/20" : "text-white/50 hover:text-white/80 hover:bg-white/10"
-                )}
+                active={isLiked}
+                className="w-9 h-9 ml-2"
+                style={{ color: isLiked ? rgb("v") : "rgba(255,255,255,0.55)" }}
               >
-                <Heart className="w-4 h-4" fill={isLiked ? "currentColor" : "none"} />
-              </button>
+                <Heart
+                  className="w-4 h-4"
+                  fill={isLiked ? "currentColor" : "none"}
+                  style={{
+                    transform: isLiked ? "scale(1.18)" : "scale(1)",
+                    transition: "transform 200ms cubic-bezier(0.34,1.56,0.64,1)",
+                  }}
+                />
+              </FsIconBtn>
             </div>
           </div>
         </div>
 
         {/* Right: Lyrics panel */}
-        {showLyricsPanel && (
-          <div className="w-1/2 flex flex-col border-l border-white/10 overflow-hidden">
-            <div className="flex items-center justify-between px-8 pt-6 pb-4 shrink-0">
-              <h2 className="text-white/80 font-bold text-lg">Letras</h2>
-              <div className="flex items-center gap-2">
-                {lyricsState.source && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-white/10 text-white/60">
-                    {lyricsState.source === "ttml" ? "TTML" : lyricsState.source === "auto" ? "Auto" : lyricsState.source === "ai" ? "IA" : "Texto"}
-                  </span>
-                )}
-                {/* AI generate button */}
-                <button
-                  onClick={handleGenerateWithAI}
-                  disabled={isGenerating || !currentSong}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-40"
-                  style={{
-                    background: isGenerating ? "rgba(255,255,255,0.05)" : `rgb(var(--dyn-v) / 0.25)`,
-                    color: `rgb(var(--dyn-v))`,
-                  }}
-                  title="Generar letras con IA"
-                >
-                  {isGenerating ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5" />
-                  )}
-                </button>
-                {/* Upload buttons */}
-                <button
-                  onClick={() => ttmlInputRef.current?.click()}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/60 hover:text-white transition-colors"
-                  title="Subir TTML"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => plainInputRef.current?.click()}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/60 hover:text-white transition-colors"
-                  title="Subir texto"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <input ref={ttmlInputRef} type="file" accept=".ttml,.xml,text/xml,application/xml" className="hidden" onChange={handleTTMLFile} />
-            <input ref={plainInputRef} type="file" accept=".txt,text/plain" className="hidden" onChange={handlePlainFile} />
-
-            {/* Lyrics content */}
-            <div className="flex-1 min-h-0 relative">
-              {isGenerating ? (
-                <div className="h-full flex flex-col items-center justify-center gap-4 text-white/60">
-                  <div className="relative">
-                    <Sparkles className="w-10 h-10 animate-pulse" style={{ color: `rgb(var(--dyn-v))` }} />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-white/80">Generando letras con IA...</p>
-                    <p className="text-xs text-white/40 mt-1">Esto puede tomar unos segundos</p>
-                  </div>
-                </div>
-              ) : lyricsState.isLoading ? (
-                <div className="h-full flex flex-col items-center justify-center gap-3 text-white/60">
-                  <Loader2 className="w-8 h-8 animate-spin" />
-                  <p className="text-sm">Buscando letras...</p>
-                </div>
-              ) : hasLyrics ? (
-                <LyricsDisplay
-                  lines={lyricsState.lines}
-                  currentTime={progress}
-                  source={lyricsState.source}
-                  isPaused={!isPlaying}
-                />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
-                  <FileText className="w-12 h-12 text-white/20" />
-                  <div>
-                    <p className="text-white/70 font-semibold text-base mb-1">Sin letras</p>
-                    <p className="text-white/40 text-sm">
-                      {generateError ?? lyricsState.error ?? "Sube un archivo TTML o genera con IA"}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 w-full max-w-xs">
-                    {/* AI generate — primary CTA */}
-                    <button
-                      onClick={handleGenerateWithAI}
-                      disabled={isGenerating || !currentSong}
-                      className="flex items-center gap-2 justify-center px-4 py-2.5 rounded-2xl text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
-                      style={{ background: `rgb(var(--dyn-v) / 0.8)`, boxShadow: `0 4px 20px rgb(var(--dyn-v) / 0.3)` }}
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Generar con IA
-                    </button>
-                    <button
-                      onClick={() => ttmlInputRef.current?.click()}
-                      className="flex items-center gap-2 justify-center px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-sm font-semibold transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Subir TTML (sincronizado)
-                    </button>
-                    <button
-                      onClick={() => plainInputRef.current?.click()}
-                      className="flex items-center gap-2 justify-center px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-sm font-semibold transition-colors"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Subir texto plano
-                    </button>
-                    <button
-                      onClick={handleAutoFetch}
-                      className="flex items-center gap-2 justify-center px-4 py-2.5 rounded-2xl transition-colors text-sm font-semibold text-white hover:opacity-80"
-                      style={{ background: rgb("v", 0.3) }}
-                    >
-                      <Globe className="w-4 h-4" />
-                      Buscar en internet
-                    </button>
-                  </div>
-                </div>
+        <div
+          className={cn(
+            "flex flex-col border-l border-white/8 overflow-hidden",
+            "transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            showLyricsPanel ? "w-1/2 opacity-100" : "w-0 opacity-0 pointer-events-none"
+          )}
+        >
+          <div className="flex items-center justify-between px-8 pt-6 pb-4 shrink-0">
+            <h2 className="text-white/80 font-bold text-lg select-none">Letras</h2>
+            <div className="flex items-center gap-1.5">
+              {lyricsState.source && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-white/10 text-white/55 select-none">
+                  {lyricsState.source === "ttml" ? "TTML" : lyricsState.source === "auto" ? "Auto" : lyricsState.source === "ai" ? "IA" : "Texto"}
+                </span>
               )}
+              {/* AI generate */}
+              <FsIconBtn
+                onClick={handleGenerateWithAI}
+                disabled={isGenerating || !currentSong}
+                title="Generar letras con IA"
+                className="w-8 h-8"
+                style={{
+                  background: isGenerating ? "rgba(255,255,255,0.05)" : `rgb(var(--dyn-v) / 0.22)`,
+                  color: `rgb(var(--dyn-v))`,
+                }}
+              >
+                {isGenerating
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Sparkles className="w-3.5 h-3.5" />}
+              </FsIconBtn>
+              <FsIconBtn onClick={() => ttmlInputRef.current?.click()} title="Subir TTML" className="w-8 h-8">
+                <Upload className="w-3.5 h-3.5" />
+              </FsIconBtn>
+              <FsIconBtn onClick={() => plainInputRef.current?.click()} title="Subir texto" className="w-8 h-8">
+                <FileText className="w-3.5 h-3.5" />
+              </FsIconBtn>
             </div>
           </div>
-        )}
+
+          <input ref={ttmlInputRef} type="file" accept=".ttml,.xml,text/xml,application/xml" className="hidden" onChange={handleTTMLFile} />
+          <input ref={plainInputRef} type="file" accept=".txt,text/plain" className="hidden" onChange={handlePlainFile} />
+
+          <div className="flex-1 min-h-0 relative">
+            {isGenerating ? (
+              <div className="h-full flex flex-col items-center justify-center gap-4 text-white/60 fade-scale-in">
+                <div className="relative">
+                  <Sparkles
+                    className="w-10 h-10"
+                    style={{
+                      color: `rgb(var(--dyn-v))`,
+                      animation: "play-pulse 1.4s ease infinite",
+                    }}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-white/80">Generando letras con IA...</p>
+                  <p className="text-xs text-white/40 mt-1">Esto puede tomar unos segundos</p>
+                </div>
+              </div>
+            ) : lyricsState.isLoading ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3 text-white/60 fade-scale-in">
+                <Loader2 className="w-8 h-8 animate-spin" />
+                <p className="text-sm">Buscando letras...</p>
+              </div>
+            ) : hasLyrics ? (
+              <LyricsDisplay
+                lines={lyricsState.lines}
+                currentTime={progress}
+                source={lyricsState.source}
+                isPaused={!isPlaying}
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center fade-scale-in">
+                <FileText className="w-12 h-12 text-white/18" />
+                <div>
+                  <p className="text-white/70 font-semibold text-base mb-1">Sin letras</p>
+                  <p className="text-white/38 text-sm">
+                    {generateError ?? lyricsState.error ?? "Sube un archivo TTML o genera con IA"}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 w-full max-w-xs">
+                  <button
+                    onClick={handleGenerateWithAI}
+                    disabled={isGenerating || !currentSong}
+                    className="icon-btn flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-sm font-semibold disabled:opacity-40 w-full justify-center"
+                    style={{
+                      background: `rgb(var(--dyn-v) / 0.8)`,
+                      boxShadow: `0 4px 20px rgb(var(--dyn-v) / 0.3)`,
+                    }}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Generar con IA
+                  </button>
+                  <button
+                    onClick={() => ttmlInputRef.current?.click()}
+                    className="icon-btn flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 text-white/70 text-sm font-semibold w-full justify-center"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Subir TTML (sincronizado)
+                  </button>
+                  <button
+                    onClick={() => plainInputRef.current?.click()}
+                    className="icon-btn flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 text-white/70 text-sm font-semibold w-full justify-center"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Subir texto plano
+                  </button>
+                  <button
+                    onClick={handleAutoFetch}
+                    className="icon-btn flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-sm font-semibold w-full justify-center"
+                    style={{ background: rgb("v", 0.28) }}
+                  >
+                    <Globe className="w-4 h-4" />
+                    Buscar en internet
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

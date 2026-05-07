@@ -23,34 +23,34 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-on-surface relative">
-      {/* Dynamic ambient gradient overlay */}
+      {/* Dynamic ambient gradient */}
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
           background: `
-            radial-gradient(ellipse 90% 55% at 5% 0%, rgb(var(--dyn-v) / ${isDark ? "0.14" : "0.08"}) 0%, transparent 55%),
-            radial-gradient(ellipse 65% 65% at 95% 100%, rgb(var(--dyn-m) / ${isDark ? "0.1" : "0.05"}) 0%, transparent 55%)
+            radial-gradient(ellipse 90% 55% at 5% 0%, rgb(var(--dyn-v) / ${isDark ? "0.13" : "0.07"}) 0%, transparent 55%),
+            radial-gradient(ellipse 65% 65% at 95% 100%, rgb(var(--dyn-m) / ${isDark ? "0.09" : "0.04"}) 0%, transparent 55%)
           `,
-          transition: "background 1.8s ease",
+          transition: "background 2s ease",
         }}
       />
 
       {/* ── Sidebar ── */}
       <aside
-        className="relative z-10 w-60 shrink-0 h-full flex flex-col border-r border-outline-variant/20"
+        className="relative z-10 w-60 shrink-0 h-full flex flex-col border-r border-outline-variant/15"
         style={{
           background: isDark
-            ? "hsl(var(--surface-container) / 0.9)"
-            : "hsl(var(--surface-container) / 0.82)",
-          backdropFilter: "blur(20px)",
+            ? "hsl(var(--surface-container) / 0.88)"
+            : "hsl(var(--surface-container) / 0.80)",
+          backdropFilter: "blur(24px)",
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <Link href="/">
-            <div className="cursor-pointer select-none">
+            <div className="cursor-pointer select-none group">
               <h1
-                className="text-lg font-bold text-on-surface tracking-tight leading-tight"
+                className="text-lg font-bold text-on-surface tracking-tight leading-tight transition-opacity duration-200 group-hover:opacity-80"
                 style={{ fontFamily: "var(--font-heading)" }}
               >
                 Cloud
@@ -59,55 +59,71 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </Link>
 
-          <div className="flex items-center gap-1">
-            {/* Dark mode toggle */}
+          <div className="flex items-center gap-0.5">
             <button
               onClick={toggleDark}
               title={isDark ? "Modo claro" : "Modo oscuro"}
-              className="w-8 h-8 rounded-full flex items-center justify-center ripple text-on-surface-variant hover:text-on-surface hover:bg-on-surface/8 transition-colors"
+              className="icon-btn w-8 h-8 ripple text-on-surface-variant hover:text-on-surface hover:bg-on-surface/8"
             >
-              {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              <span className="transition-transform duration-300" style={{ transform: isDark ? "rotate(0deg)" : "rotate(180deg)" }}>
+                {isDark
+                  ? <Sun className="w-3.5 h-3.5" />
+                  : <Moon className="w-3.5 h-3.5" />}
+              </span>
             </button>
 
-            {/* Settings */}
             <button
               onClick={() => setSettingsOpen(true)}
-              className="w-8 h-8 rounded-full flex items-center justify-center ripple text-on-surface-variant hover:text-on-surface hover:bg-on-surface/8 transition-colors"
+              className="icon-btn w-8 h-8 ripple text-on-surface-variant hover:text-on-surface hover:bg-on-surface/8"
               title="Ajustes"
             >
-              <Settings className="w-3.5 h-3.5" />
+              <Settings className="w-3.5 h-3.5 transition-transform duration-500 hover:rotate-45" />
             </button>
           </div>
         </div>
 
         <div className="px-3 pb-2">
-          <div className="h-px bg-outline-variant/25" />
+          <div className="h-px bg-outline-variant/20" />
         </div>
 
         {/* Nav items */}
         <nav className="px-3 space-y-0.5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-3 py-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-3 py-1.5 select-none">
             Navegar
           </p>
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.map((item, idx) => {
             const isActive = location.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer ripple transition-all select-none",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer ripple select-none",
+                    "stagger-item",
                     !isActive && "text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5"
                   )}
-                  style={isActive ? {
-                    background: `rgb(var(--dyn-v) / 0.15)`,
-                    color: `rgb(var(--dyn-v))`,
-                    fontWeight: 600,
-                  } : {}}
+                  style={{
+                    animationDelay: `${idx * 40}ms`,
+                    ...(isActive ? {
+                      background: `rgb(var(--dyn-v) / 0.14)`,
+                      color: `rgb(var(--dyn-v))`,
+                      fontWeight: 600,
+                    } : {}),
+                    transition: "background-color 180ms ease, color 180ms ease, transform 120ms cubic-bezier(0.34,1.56,0.64,1)",
+                  }}
                 >
-                  <Icon className="w-4 h-4 shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                  <Icon
+                    className="w-4 h-4 shrink-0 transition-transform duration-200"
+                    strokeWidth={isActive ? 2.5 : 2}
+                  />
                   <span className="text-sm">{item.label}</span>
-                  {isActive && <ChevronRight className="w-3 h-3 ml-auto opacity-60" />}
+                  <ChevronRight
+                    className="w-3 h-3 ml-auto transition-all duration-200"
+                    style={{
+                      opacity: isActive ? 0.6 : 0,
+                      transform: isActive ? "translateX(0)" : "translateX(-4px)",
+                    }}
+                  />
                 </div>
               </Link>
             );
@@ -118,30 +134,50 @@ export function Layout({ children }: { children: ReactNode }) {
         {userSongs.length > 0 && (
           <>
             <div className="px-3 pt-4 pb-1">
-              <div className="h-px bg-outline-variant/25" />
+              <div className="h-px bg-outline-variant/20" />
             </div>
             <div className="px-3 pt-2 flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-3 py-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-3 py-1.5 select-none">
                 Mis archivos
               </p>
               <div className="space-y-0.5">
-                {userSongs.map((song) => {
+                {userSongs.map((song, idx) => {
                   const isActive = currentSong?.id === song.id;
                   return (
                     <div
                       key={song.id}
                       onClick={() => play(song)}
                       className={cn(
-                        "flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer ripple transition-all",
+                        "flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer ripple stagger-item",
                         !isActive && "text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5"
                       )}
-                      style={isActive ? {
-                        background: `rgb(var(--dyn-v) / 0.15)`,
-                        color: `rgb(var(--dyn-v))`,
-                        fontWeight: 600,
-                      } : {}}
+                      style={{
+                        animationDelay: `${(idx + NAV_ITEMS.length) * 30}ms`,
+                        ...(isActive ? {
+                          background: `rgb(var(--dyn-v) / 0.14)`,
+                          color: `rgb(var(--dyn-v))`,
+                          fontWeight: 600,
+                        } : {}),
+                        transition: "background-color 180ms ease, color 180ms ease",
+                      }}
                     >
-                      <Music2 className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+                      {isActive ? (
+                        <div className="flex items-end gap-[2px] h-3 shrink-0">
+                          {[1, 0.55, 0.8].map((h, j) => (
+                            <div
+                              key={j}
+                              className="w-0.5 rounded-full"
+                              style={{
+                                height: `${h * 12}px`,
+                                background: `rgb(var(--dyn-v))`,
+                                animation: `waveform ${0.6 + j * 0.15}s ease-in-out ${j * 0.1}s infinite alternate`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <Music2 className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+                      )}
                       <span className="text-xs truncate">{song.title}</span>
                     </div>
                   );
@@ -154,14 +190,22 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Now playing mini strip */}
         {currentSong && (
           <div className="mt-auto px-3 pb-24">
-            <div className="h-px bg-outline-variant/25 mb-3" />
+            <div className="h-px bg-outline-variant/20 mb-3" />
             <Link href="/">
-              <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-2xl bg-surface-high cursor-pointer hover:bg-surface-highest transition-colors">
-                <img
-                  src={currentSong.coverUrl}
-                  alt=""
-                  className="w-8 h-8 rounded-xl object-cover shrink-0"
-                />
+              <div
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-2xl cursor-pointer ripple group"
+                style={{
+                  background: "hsl(var(--surface-high) / 0.9)",
+                  transition: "background-color 200ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1)",
+                }}
+              >
+                <div className="relative shrink-0">
+                  <img
+                    src={currentSong.coverUrl}
+                    alt=""
+                    className="w-8 h-8 rounded-xl object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-on-surface truncate leading-tight">
                     {currentSong.title}
@@ -177,11 +221,14 @@ export function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* ── Main content ── */}
-      <main className="relative z-10 flex-1 h-full overflow-y-auto pb-28 bg-background/60">
+      <main
+        key={location}
+        className="relative z-10 flex-1 h-full overflow-y-auto pb-28 bg-background/50 page-enter"
+      >
         {children}
       </main>
 
-      {/* ── Transport bar (with fullscreen + queue buttons inside) ── */}
+      {/* ── Transport bar ── */}
       <TransportBar onFullscreen={() => setFullscreenOpen(true)} />
 
       {/* ── Panels ── */}
