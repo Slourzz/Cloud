@@ -98,14 +98,17 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
           duration: currentSong.duration,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Error desconocido" }));
-        throw new Error(err.error ?? "Error del servidor");
+      const data = await res.json().catch(() => ({})) as { ttml?: string; error?: string };
+      if (!res.ok || data.error === "lyrics_not_found") {
+        throw new Error("lyrics_not_found");
       }
-      const data = await res.json() as { ttml: string };
+      if (!res.ok || !data.ttml) throw new Error("server_error");
       loadTTML(songId, data.ttml);
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : "Error al generar letras");
+      const msg = err instanceof Error ? err.message : "Error al generar";
+      setGenerateError(msg.includes("404") || msg.includes("lyrics_not_found")
+        ? "No encontré las letras de esta canción"
+        : "Error al conectar con el servidor");
     } finally {
       setIsGenerating(false);
     }

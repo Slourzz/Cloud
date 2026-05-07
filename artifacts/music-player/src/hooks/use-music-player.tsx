@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import {
+  dbSaveSong, dbGetAllSongs, dbUpdateCover, dbUpdateExtCoverUrl, dbDeleteSong,
+} from "@/hooks/use-song-db";
 
 export interface Song {
   id: string;
@@ -26,6 +29,7 @@ interface MusicPlayerState {
   allSongs: Song[];
   audioQuality: AudioQuality;
   crossfadeSeconds: number;
+  isLoadingLibrary: boolean;
   play: (song?: Song) => void;
   pause: () => void;
   togglePlayPause: () => void;
@@ -39,6 +43,8 @@ interface MusicPlayerState {
   reorderQueue: (newQueue: Song[]) => void;
   addToQueue: (song: Song) => void;
   addUserSong: (file: File) => Promise<void>;
+  updateSongCover: (songId: string, file: File) => Promise<void>;
+  deleteSong: (songId: string) => Promise<void>;
   setAudioQuality: (q: AudioQuality) => void;
   setCrossfadeSeconds: (s: number) => void;
 }
@@ -65,6 +71,10 @@ async function searchItunesArtwork(title: string, artist: string): Promise<strin
   }
 }
 
+function makeBlobUrl(data: ArrayBuffer, mime: string): string {
+  return URL.createObjectURL(new Blob([data], { type: mime }));
+}
+
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [queue, setQueue] = useState<Song[]>([]);
@@ -77,6 +87,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [userSongs, setUserSongs] = useState<Song[]>([]);
   const [audioQuality, setAudioQualityState] = useState<AudioQuality>("high");
   const [crossfadeSeconds, setCrossfadeSecondsState] = useState(3);
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
 
   const mainAudioRef = useRef<HTMLAudioElement | null>(null);
   const incomingAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -88,6 +99,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const volumeRef = useRef(volume);
   const crossfadeSecondsRef = useRef(crossfadeSeconds);
   const isRepeatRef = useRef(isRepeat);
+  // Track blob URLs for cleanup
+  const blobUrlsRef = useRef<Map<string, string[]>>(new Map());
 
   useEffect(() => { queueRef.current = queue; }, [queue]);
   useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
@@ -95,12 +108,40 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => { crossfadeSecondsRef.current = crossfadeSeconds; }, [crossfadeSeconds]);
   useEffect(() => { isRepeatRef.current = isRepeat; }, [isRepeat]);
 
+  // Load songs from IndexedDB on startup
+  useEffect(() => {
+    dbGetAllSongs().then((dbSongs) => {
+      const songs: Song[] = dbSongs.map((dbSong) => {
+        const audioUrl = makeBlobUrl(dbSong.audioData, dbSong.audioMime || "audio/mpeg");
+        let coverUrl = "/album1.png";
+        if (dbSong.coverData && dbSong.coverMime) {
+          coverUrl = makeBlobUrl(dbSong.coverData, dbSong.coverMime);
+        } else if (dbSong.coverExtUrl) {
+          coverUrl = dbSong.coverExtUrl;
+        }
+        blobUrlsRef.current.set(dbSong.id, [audioUrl, ...(coverUrl.startsWith("blob:") ? [coverUrl] : [])]);
+        return {
+          id: dbSong.id,
+          title: dbSong.title,
+          artist: dbSong.artist,
+          album: dbSong.album,
+          duration: dbSong.duration,
+          coverUrl,
+          audioUrl,
+          isUserUploaded: true,
+        };
+      });
+      if (songs.length > 0) setUserSongs(songs);
+    }).catch(() => {}).finally(() => setIsLoadingLibrary(false));
+  }, []);
+
   useEffect(() => {
     mainAudioRef.current = new Audio();
     incomingAudioRef.current = new Audio();
     return () => {
       mainAudioRef.current?.pause();
       incomingAudioRef.current?.pause();
+      blobUrlsRef.current.forEach((urls) => urls.forEach(URL.revokeObjectURL));
     };
   }, []);
 
@@ -247,35 +288,89 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   };
 
   const addUserSong = async (file: File): Promise<void> => {
+    const audioData = await file.arrayBuffer();
+    const audioMime = file.type || "audio/mpeg";
+    const audioUrl = makeBlobUrl(audioData, audioMime);
+    const name = file.name.replace(/\.[^/.]+$/, "");
+
     return new Promise((resolve) => {
-      const url = URL.createObjectURL(file);
-      const name = file.name.replace(/\.[^/.]+$/, "");
-      const audio = new Audio(url);
-      const finalize = (dur: number) => {
+      const audio = new Audio(audioUrl);
+      const finalize = async (dur: number) => {
+        const id = `user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const newSong: Song = {
-          id: `user-${Date.now()}-${Math.random()}`,
+          id,
           title: name,
           artist: "Unknown Artist",
           album: "Mis archivos",
           duration: Math.floor(dur) || 0,
           coverUrl: "/album1.png",
-          audioUrl: url,
+          audioUrl,
           isUserUploaded: true,
         };
+
+        blobUrlsRef.current.set(id, [audioUrl]);
+
+        await dbSaveSong({
+          id,
+          title: name,
+          artist: "Unknown Artist",
+          album: "Mis archivos",
+          duration: Math.floor(dur) || 0,
+          audioData,
+          audioMime,
+          coverData: null,
+          coverMime: null,
+          coverExtUrl: null,
+        }).catch(() => {});
+
         setUserSongs((prev) => [...prev, newSong]);
         addToQueue(newSong);
         resolve();
-        // Auto-search album art from iTunes
-        searchItunesArtwork(name, "").then((artUrl) => {
+
+        // Auto-search album art
+        searchItunesArtwork(name, "").then(async (artUrl) => {
           if (!artUrl) return;
-          setUserSongs((prev) => prev.map((s) => s.id === newSong.id ? { ...s, coverUrl: artUrl } : s));
-          setCurrentSong((prev) => prev?.id === newSong.id ? { ...prev, coverUrl: artUrl } : prev);
-          setQueue((prev) => prev.map((s) => s.id === newSong.id ? { ...s, coverUrl: artUrl } : s));
+          const updater = (s: Song) => s.id === id ? { ...s, coverUrl: artUrl } : s;
+          setUserSongs((prev) => prev.map(updater));
+          setCurrentSong((prev) => prev?.id === id ? { ...prev, coverUrl: artUrl } : prev);
+          setQueue((prev) => prev.map(updater));
+          await dbUpdateExtCoverUrl(id, artUrl).catch(() => {});
         });
       };
       audio.addEventListener("loadedmetadata", () => finalize(audio.duration));
       audio.addEventListener("error", () => finalize(0));
     });
+  };
+
+  const updateSongCover = async (songId: string, file: File): Promise<void> => {
+    const coverData = await file.arrayBuffer();
+    const coverMime = file.type || "image/jpeg";
+    const coverUrl = makeBlobUrl(coverData, coverMime);
+
+    // Revoke old cover blob if any
+    const existing = blobUrlsRef.current.get(songId) ?? [];
+    blobUrlsRef.current.set(songId, [existing[0] ?? "", coverUrl].filter(Boolean));
+
+    const updater = (s: Song) => s.id === songId ? { ...s, coverUrl } : s;
+    setUserSongs((prev) => prev.map(updater));
+    setCurrentSong((prev) => prev?.id === songId ? { ...prev, coverUrl } : prev);
+    setQueue((prev) => prev.map(updater));
+
+    await dbUpdateCover(songId, coverData, coverMime).catch(() => {});
+  };
+
+  const deleteSong = async (songId: string): Promise<void> => {
+    // Revoke blob URLs
+    const urls = blobUrlsRef.current.get(songId) ?? [];
+    urls.forEach(URL.revokeObjectURL);
+    blobUrlsRef.current.delete(songId);
+
+    setUserSongs((prev) => prev.filter((s) => s.id !== songId));
+    setQueue((prev) => prev.filter((s) => s.id !== songId));
+    if (currentSongRef.current?.id === songId) {
+      doNext();
+    }
+    await dbDeleteSong(songId).catch(() => {});
   };
 
   const setAudioQuality = (q: AudioQuality) => setAudioQualityState(q);
@@ -286,10 +381,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     <MusicPlayerContext.Provider value={{
       currentSong, queue, isPlaying, progress, volume,
       isShuffle, isRepeat, likedSongs, userSongs, allSongs,
-      audioQuality, crossfadeSeconds,
+      audioQuality, crossfadeSeconds, isLoadingLibrary,
       play, pause, togglePlayPause, next, prev,
       seek, setVolume, toggleShuffle, toggleRepeat, toggleLike,
-      reorderQueue, addToQueue, addUserSong,
+      reorderQueue, addToQueue, addUserSong, updateSongCover, deleteSong,
       setAudioQuality, setCrossfadeSeconds,
     }}>
       {children}

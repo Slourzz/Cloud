@@ -1,71 +1,61 @@
-# Workspace
+# Cloud — Music Player
 
-## Overview
+Desktop music player web app. Users upload their own audio files and listen with a premium Apple Music–style experience.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+## Run & Operate
+
+- `pnpm --filter @workspace/music-player run dev` — start frontend (via workflow)
+- `pnpm --filter @workspace/api-server run dev` — start API server (via workflow)
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+
+Required env vars: `PORT`, `SESSION_SECRET`, `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Frontend**: React + Vite + Tailwind v4 + Wouter router + Lucide + shadcn/ui Slider
+- **Backend**: Express 5 + pnpm workspace monorepo
+- **AI**: OpenAI via Replit AI Integrations (`@workspace/integrations-openai-ai-server`)
+- **Storage**: IndexedDB (`cloud-music-db`) for audio + cover persistence
+- **Theme**: Material You M3 blue (`#0A84FF`), dark mode default
+- **Node.js**: 24 / TypeScript 5.9
 
-## Key Commands
+## Where things live
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `artifacts/music-player/src/hooks/use-music-player.tsx` — all playback state, IndexedDB persistence, iTunes art search
+- `artifacts/music-player/src/hooks/use-song-db.ts` — IndexedDB CRUD (save/load/cover/delete songs)
+- `artifacts/music-player/src/hooks/use-theme-colors.tsx` — RAF-animated `--dyn-v/d/m` CSS vars from album art
+- `artifacts/music-player/src/hooks/use-lyrics.tsx` — TTML + plain text parsers, lyrics.ovh auto-fetch
+- `artifacts/music-player/src/hooks/use-dark-mode.tsx` — dark mode default (localStorage key: `cloud-mode`)
+- `artifacts/music-player/src/hooks/use-playlists.tsx` — playlist CRUD (localStorage key: `cloud-playlists`)
+- `artifacts/api-server/src/routes/ttml.ts` — `POST /api/ttml/generate` — AI TTML generation via OpenAI
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Architecture decisions
 
-## Music Player Artifact (`artifacts/music-player`)
+- **IndexedDB for audio**: songs are stored as ArrayBuffers in `cloud-music-db`; blob URLs created on load. Avoids data loss on refresh.
+- **Dynamic theming via RAF**: `--dyn-v/d/m` CSS vars updated at 60fps from canvas pixel sampling of album art. Used via `rgb(var(--dyn-v))` everywhere.
+- **No demo songs**: app starts empty; only user-uploaded audio.
+- **TTML AI generation**: server-side OpenAI call with strict system prompt — only uses real known lyrics; returns `{"error":"lyrics_not_found"}` if uncertain.
+- **Dark mode default**: inline `<script>` in `index.html` applies `.dark` before React mounts, preventing flash.
 
-Full desktop music player at `/`. React + Vite + Tailwind v4 + Material You (M3) deep purple theme.
+## Product
 
-### Architecture
+- Upload MP3/WAV/FLAC/AAC/OGG/M4A/OPUS files
+- Auto album art from iTunes Search API on upload
+- Custom cover art per song (click thumbnail in library → pick image)
+- Delete songs from library (also removes from IndexedDB)
+- Songs persist across sessions via IndexedDB (no re-upload needed)
+- Crossfade 0–12s between songs
+- AI-generated TTML lyrics (real lyrics only, via `POST /api/ttml/generate`)
+- Upload TTML or plain text lyrics manually
+- Fullscreen player with lyrics panel (word glow + idle dots)
+- Playlists with custom covers and sorting
+- Liked songs list
+- Queue management
 
-- **`src/hooks/use-music-player.tsx`** — central state: real HTMLAudioElement playback, crossfade (two audio refs, setInterval fade), iTunes API album art auto-search for user uploads, simulated timer for demo songs.
-- **`src/hooks/use-theme-colors.tsx`** — extracts vibrant color from current album art via canvas, animates `--dyn-v` / `--dyn-d` / `--dyn-m` CSS custom properties via `requestAnimationFrame` at 60fps for smooth color transitions across the whole UI.
-- **`src/hooks/use-playlists.tsx`** — playlist CRUD with localStorage persistence. Covers: 8 gradient templates + custom image. Sort by newest/A-Z/artist.
-- **`src/hooks/use-lyrics.tsx`** — TTML parser (via DOMParser), plain text parser, auto-fetch from lyrics.ovh API (no key needed).
+## Gotchas
 
-### Layout
-
-- **Sidebar** (240px): Explorar · Biblioteca · Me gusta · Settings gear button · Mini now-playing indicator
-- **Main content**: route-based pages
-- **Transport bar** (floating pill, bottom center): all controls + progress + volume, colors driven by `--dyn-v`
-- **Corner controls** (bottom-right): Queue toggle (navigates to /queue) + Fullscreen button
-- **Fullscreen overlay**: dynamic gradient bg from album art, album art + controls (left) + lyrics panel (right)
-
-### Dynamic Theming
-
-CSS variables `--dyn-v`, `--dyn-d`, `--dyn-m` (RGB space-separated) are updated frame-by-frame via RAF. Components use `rgb(var(--dyn-v))` inline styles. The background gradient overlay in Layout uses these variables, creating a smooth ambient glow that changes with each song. Sidebar active states, play button, corner buttons, slider thumb all follow the dynamic color.
-
-### Routes
-
-- `/` — Now Playing (large centered album art)
-- `/library` — Full song list with search
-- `/queue` — Playback queue
-- `/liked` — Liked songs list
-- `/playlists` — Playlists grid (Explorar mode)
-- `/playlists/:id` — Playlist detail with editable title, sort, add/remove songs
-
-### Features
-
-- **Real audio playback** for uploaded files (HTMLAudioElement)
-- **Crossfade** 0–12s between user-uploaded songs
-- **Auto album art** from iTunes Search API for uploaded songs
-- **Auto lyrics** from lyrics.ovh (no key) for uploaded songs
-- **TTML lyrics** upload with Apple Music–style word-level sync
-- **Plain text lyrics** upload (line-based)
-- **Fullscreen lyrics** with auto-scroll, past/current/future line styling
-- **Playlist system**: create/edit/delete, custom covers, sort, add songs
-- **Settings panel**: audio quality selector, crossfade slider, drag-and-drop file upload
+- Blob URLs revoked on cleanup; all audio/cover data stored in IndexedDB
+- `res.json()` must only be called once per response (body is a stream)
+- The AI TTML endpoint returns 404 with `{"error":"lyrics_not_found"}` when lyrics are unknown — handle in frontend
+- `cloud-mode` localStorage key (values: `"dark"` | `"light"`) — changed from `cloud-dark` to reset stale state

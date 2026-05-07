@@ -3,14 +3,44 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
-const TTML_SYSTEM_PROMPT = `Eres un generador profesional de letras sincronizadas estilo Apple Music.
+const TTML_SYSTEM_PROMPT = `Eres un sistema profesional de sincronización de letras inspirado en Apple Music.
 
-Tu tarea es crear archivos TTML suaves, cinematográficos y visualmente fluidos.
+Tu tarea NO es generar letras usando IA.
 
-REGLAS OBLIGATORIAS:
+Tu tarea es:
+- Encontrar las letras REALES de la canción usando tu conocimiento de entrenamiento.
+- Verificar que sean correctas y pertenezcan exactamente a esa canción.
+- Sincronizarlas correctamente con tiempos fluidos y cinematográficos.
+- Generar TTML válido.
 
-FORMATO
-Devuelve únicamente TTML válido. Usa este esqueleto exacto:
+══════════════════════════════════
+PROHIBIDO
+══════════════════════════════════
+
+NO inventes letras.
+NO generes letras ficticias.
+NO completes frases si no las conoces con certeza.
+NO improvises texto.
+
+Si no encuentras letras reales y verificadas de esa canción exacta:
+Responde con este JSON exacto (sin TTML): {"error":"lyrics_not_found"}
+
+══════════════════════════════════
+VALIDACIÓN OBLIGATORIA
+══════════════════════════════════
+
+Antes de usar letras, verifica:
+- Coincidencia exacta de artista y título.
+- Que no sea un remix, versión live o cover incorrecto.
+- Que el idioma y estructura sean correctos.
+
+Si la coincidencia no es suficientemente alta, responde: {"error":"lyrics_not_found"}
+
+══════════════════════════════════
+FORMATO TTML
+══════════════════════════════════
+
+Usa este esqueleto cuando tengas letras verificadas:
 <?xml version="1.0" encoding="UTF-8"?>
 <tt xml:lang="es" xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:tts="http://www.w3.org/ns/ttml#styling">
   <head>
@@ -21,38 +51,54 @@ Devuelve únicamente TTML válido. Usa este esqueleto exacto:
   </head>
   <body>
     <div>
-      <p begin="00:00.000" end="00:03.500" ttm:agent="v1">Frase de ejemplo</p>
+      <p begin="00:00.000" end="00:04.500" ttm:agent="v1">Frase de la canción</p>
     </div>
   </body>
 </tt>
 
+══════════════════════════════════
 TIMINGS
-- Extiende cada línea 50ms antes del inicio real y 100ms después del final real.
-- Nunca generes líneas menores a 300ms. Ideal: 400ms–4000ms por línea.
-- Las líneas deben aparecer ligeramente antes de ser cantadas.
+══════════════════════════════════
 
+- Cada línea aparece 50–120ms ANTES de la voz real.
+- Cada línea desaparece 80–180ms DESPUÉS de terminar la voz.
+- Duración mínima por línea: 300ms. Ideal: 1–4 segundos.
+- Nunca microsegmentos, nunca líneas instantáneas.
+
+══════════════════════════════════
 AGRUPACIÓN
+══════════════════════════════════
+
 - Agrupa frases naturales completas en una sola línea <p>.
 - NO hagas karaoke palabra por palabra.
+- NO dividas conectores, artículos ni frases pequeñas.
 - Mantén respiraciones naturales.
 
+══════════════════════════════════
 PAUSAS
-- Solo agrega línea "..." si el silencio entre frases es MAYOR o igual a 0.8 segundos.
-- Si la pausa es menor, mantén transición fluida sin puntos suspensivos.
+══════════════════════════════════
 
+- Solo usa "..." si el silencio entre frases es MAYOR a 0.8 segundos.
+- Si la pausa es menor, transición fluida sin puntos suspensivos.
+
+══════════════════════════════════
 SUAVIDAD VISUAL
-- Evita líneas extremadamente cortas (menos de 3 palabras, salvo efectos artísticos).
-- Evita microsegmentos (menos de 300ms).
-- Las transiciones deben sentirse suaves, flotantes, cinematográficas.
+══════════════════════════════════
 
-TEXTO
-- Conserva puntuación natural de la canción.
-- No agregues etiquetas extra ni atributos innecesarios.
+Las letras serán animadas con fade, glow, blur y scroll cinematográfico.
+Los tiempos deben ser suaves, estables y relajados.
+Evita cambios rápidos, líneas ultracortas y timings agresivos.
 
+══════════════════════════════════
 SALIDA
-- Devuelve SOLO TTML limpio y válido.
-- Sin markdown, sin explicaciones, sin comentarios.
-- Empieza directamente con <?xml`;
+══════════════════════════════════
+
+Si tienes letras reales verificadas:
+Devuelve SOLO el TTML limpio y válido. Sin markdown, sin explicaciones.
+Empieza directamente con <?xml
+
+Si NO tienes letras reales verificadas:
+Devuelve exactamente: {"error":"lyrics_not_found"}`;
 
 router.post("/ttml/generate", async (req, res) => {
   try {
@@ -71,12 +117,12 @@ router.post("/ttml/generate", async (req, res) => {
       ? `La canción dura aproximadamente ${Math.round(duration)} segundos.`
       : "";
 
-    const userPrompt = `Genera letras TTML sincronizadas para la canción:
+    const userPrompt = `Canción:
 Título: ${title}
 Artista: ${artist || "Desconocido"}
 ${durationStr}
 
-Crea las letras reales de esta canción si las conoces, con tiempos aproximados que encajen en su duración total. Si no conoces la canción, crea letras genéricas en el idioma apropiado con tiempos bien distribuidos durante la duración de la canción. El resultado debe ser TTML válido listo para usar.`;
+Busca las letras REALES de esta canción en tu conocimiento. Si las conoces con certeza, genera el TTML sincronizado. Si no estás seguro al 100% de que sean las letras correctas y completas, responde con {"error":"lyrics_not_found"}.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-5.1",
@@ -87,17 +133,23 @@ Crea las letras reales de esta canción si las conoces, con tiempos aproximados 
       ],
     });
 
-    const ttml = completion.choices[0]?.message?.content ?? "";
+    const content = (completion.choices[0]?.message?.content ?? "").trim();
 
-    if (!ttml.includes("<?xml")) {
-      res.status(500).json({ error: "AI returned invalid TTML" });
+    // Check if AI returned an error signal
+    if (content.startsWith("{") && content.includes("lyrics_not_found")) {
+      res.status(404).json({ error: "lyrics_not_found" });
       return;
     }
 
-    res.json({ ttml });
+    if (!content.includes("<?xml")) {
+      res.status(404).json({ error: "lyrics_not_found" });
+      return;
+    }
+
+    res.json({ ttml: content });
   } catch (err) {
     req.log.error(err, "TTML generation failed");
-    res.status(500).json({ error: "Failed to generate TTML" });
+    res.status(500).json({ error: "server_error" });
   }
 });
 
