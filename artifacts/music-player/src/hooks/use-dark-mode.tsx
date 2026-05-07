@@ -9,12 +9,12 @@ const DarkModeContext = createContext<DarkModeContextValue>({ isDark: false, tog
 
 export function DarkModeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState(() => {
-    try { return localStorage.getItem("soundscape-dark") === "1"; } catch { return false; }
+    try { return localStorage.getItem("cloud-dark") === "1"; } catch { return false; }
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
-    try { localStorage.setItem("soundscape-dark", isDark ? "1" : "0"); } catch {}
+    try { localStorage.setItem("cloud-dark", isDark ? "1" : "0"); } catch {}
   }, [isDark]);
 
   const toggleDark = () => setIsDark((d) => !d);

@@ -49,7 +49,7 @@ const PlaylistsContext = createContext<PlaylistsContextValue>({
   removeSongFromPlaylist: () => {},
 });
 
-const STORAGE_KEY = "soundscape-playlists";
+const STORAGE_KEY = "cloud-playlists";
 
 function loadPlaylists(): Playlist[] {
   try {

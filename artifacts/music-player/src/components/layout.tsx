@@ -53,7 +53,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 className="text-lg font-bold text-on-surface tracking-tight leading-tight"
                 style={{ fontFamily: "var(--font-heading)" }}
               >
-                Soundscape
+                Cloud
               </h1>
               <p className="text-[11px] text-on-surface-variant">Music Player</p>
             </div>
