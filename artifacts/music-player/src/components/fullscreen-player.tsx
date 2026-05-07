@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import {
   Play, Pause, SkipBack, SkipForward,
   Repeat, Shuffle, Heart, Volume2, ChevronDown,
-  Upload, FileText, Globe, X, Loader2,
+  Upload, FileText, Globe, Loader2, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +32,14 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
 
   const [visible, setVisible] = useState(false);
   const [showLyricsPanel, setShowLyricsPanel] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const ttmlInputRef = useRef<HTMLInputElement>(null);
   const plainInputRef = useRef<HTMLInputElement>(null);
 
   const songId = currentSong?.id ?? "";
   const lyricsState = getLyrics(songId);
 
-  // Animate mount/unmount
   useEffect(() => {
     if (open) {
       setVisible(true);
@@ -48,7 +49,6 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
     }
   }, [open]);
 
-  // Auto-fetch lyrics for user-uploaded songs
   useEffect(() => {
     if (open && currentSong?.isUserUploaded && songId) {
       fetchAutoLyrics(songId, currentSong.artist, currentSong.title);
@@ -82,6 +82,33 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
   const handleAutoFetch = () => {
     if (!currentSong || !songId) return;
     fetchAutoLyrics(songId, currentSong.artist, currentSong.title);
+  };
+
+  const handleGenerateWithAI = async () => {
+    if (!currentSong || !songId) return;
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const res = await fetch("/api/ttml/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: currentSong.title,
+          artist: currentSong.artist,
+          duration: currentSong.duration,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Error desconocido" }));
+        throw new Error(err.error ?? "Error del servidor");
+      }
+      const data = await res.json() as { ttml: string };
+      loadTTML(songId, data.ttml);
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : "Error al generar letras");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (!visible) return null;
@@ -238,9 +265,26 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
               <div className="flex items-center gap-2">
                 {lyricsState.source && (
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-white/10 text-white/60">
-                    {lyricsState.source === "ttml" ? "TTML" : lyricsState.source === "auto" ? "Auto" : "Texto"}
+                    {lyricsState.source === "ttml" ? "TTML" : lyricsState.source === "auto" ? "Auto" : lyricsState.source === "ai" ? "IA" : "Texto"}
                   </span>
                 )}
+                {/* AI generate button */}
+                <button
+                  onClick={handleGenerateWithAI}
+                  disabled={isGenerating || !currentSong}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-40"
+                  style={{
+                    background: isGenerating ? "rgba(255,255,255,0.05)" : `rgb(var(--dyn-v) / 0.25)`,
+                    color: `rgb(var(--dyn-v))`,
+                  }}
+                  title="Generar letras con IA"
+                >
+                  {isGenerating ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                </button>
                 {/* Upload buttons */}
                 <button
                   onClick={() => ttmlInputRef.current?.click()}
@@ -264,7 +308,17 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
 
             {/* Lyrics content */}
             <div className="flex-1 min-h-0 relative">
-              {lyricsState.isLoading ? (
+              {isGenerating ? (
+                <div className="h-full flex flex-col items-center justify-center gap-4 text-white/60">
+                  <div className="relative">
+                    <Sparkles className="w-10 h-10 animate-pulse" style={{ color: `rgb(var(--dyn-v))` }} />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-white/80">Generando letras con IA...</p>
+                    <p className="text-xs text-white/40 mt-1">Esto puede tomar unos segundos</p>
+                  </div>
+                </div>
+              ) : lyricsState.isLoading ? (
                 <div className="h-full flex flex-col items-center justify-center gap-3 text-white/60">
                   <Loader2 className="w-8 h-8 animate-spin" />
                   <p className="text-sm">Buscando letras...</p>
@@ -282,10 +336,20 @@ export function FullscreenPlayer({ open, onClose }: FullscreenPlayerProps) {
                   <div>
                     <p className="text-white/70 font-semibold text-base mb-1">Sin letras</p>
                     <p className="text-white/40 text-sm">
-                      {lyricsState.error ?? "Sube un archivo TTML o de texto"}
+                      {generateError ?? lyricsState.error ?? "Sube un archivo TTML o genera con IA"}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 w-full max-w-xs">
+                    {/* AI generate — primary CTA */}
+                    <button
+                      onClick={handleGenerateWithAI}
+                      disabled={isGenerating || !currentSong}
+                      className="flex items-center gap-2 justify-center px-4 py-2.5 rounded-2xl text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
+                      style={{ background: `rgb(var(--dyn-v) / 0.8)`, boxShadow: `0 4px 20px rgb(var(--dyn-v) / 0.3)` }}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Generar con IA
+                    </button>
                     <button
                       onClick={() => ttmlInputRef.current?.click()}
                       className="flex items-center gap-2 justify-center px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-sm font-semibold transition-colors"
