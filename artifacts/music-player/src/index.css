@@ -55,44 +55,44 @@
 
 :root {
   /* Dynamic theme colors — animated via requestAnimationFrame in use-theme-colors.tsx */
-  --dyn-v: 103 80 164;    /* vibrant */
-  --dyn-d: 18 14 30;      /* dark */
-  --dyn-m: 55 42 95;      /* mid */
+  --dyn-v: 10 132 255;    /* vibrant — iOS blue default */
+  --dyn-d: 0 18 52;       /* dark */
+  --dyn-m: 5 65 140;      /* mid */
 
-  /* Material 3 Deep Purple Theme */
-  --primary: 256 34% 48%; /* #6750A4 */
-  --primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --primary-container: 268 100% 92%; /* #EADDFF */
-  --on-primary-container: 261 100% 18%; /* #21005D */
+  /* Material 3 Blue Theme */
+  --primary: 211 100% 52%; /* #0A84FF — iOS Blue */
+  --primary-foreground: 0 0% 100%;
+  --primary-container: 211 100% 93%; /* #E1F0FF */
+  --on-primary-container: 211 100% 20%; /* #003366 */
 
-  --secondary: 260 11% 40%; /* #625B71 */
-  --secondary-foreground: 0 0% 100%; /* #FFFFFF */
-  --secondary-container: 263 54% 91%; /* #E8DEF8 */
-  --on-secondary-container: 255 26% 13%; /* #1D192B */
+  --secondary: 213 18% 42%; /* blue-gray */
+  --secondary-foreground: 0 0% 100%;
+  --secondary-container: 213 46% 91%; /* #DDE8F5 */
+  --on-secondary-container: 213 40% 14%; /* #102235 */
 
-  --tertiary: 339 21% 40%; /* #7D5260 */
-  --tertiary-foreground: 0 0% 100%; /* #FFFFFF */
-  --tertiary-container: 341 100% 92%; /* #FFD8E4 */
-  --on-tertiary-container: 337 48% 13%; /* #31111D */
+  --tertiary: 197 52% 42%; /* teal */
+  --tertiary-foreground: 0 0% 100%;
+  --tertiary-container: 197 100% 91%; /* #D0F4FF */
+  --on-tertiary-container: 197 100% 13%; /* #003340 */
 
-  --error: 358 65% 42%; /* #B3261E */
-  --error-foreground: 0 0% 100%; /* #FFFFFF */
-  --error-container: 358 68% 92%; /* #F9DEDC */
-  --on-error-container: 356 71% 15%; /* #410E0B */
+  --error: 358 65% 42%;
+  --error-foreground: 0 0% 100%;
+  --error-container: 358 68% 92%;
+  --on-error-container: 356 71% 15%;
 
-  --surface: 280 100% 99%; /* #FEF7FF */
-  --on-surface: 260 9% 12%; /* #1D1B20 */
-  --surface-variant: 275 24% 90%; /* #E7E0EC */
-  --on-surface-variant: 266 7% 29%; /* #49454F */
-  
-  --surface-lowest: 0 0% 100%; /* #FFFFFF */
-  --surface-low: 277 34% 96%; /* #F7F2FA */
-  --surface-container: 278 28% 94%; /* #F3EDF7 */
-  --surface-high: 278 25% 92%; /* #ECE6F0 */
-  --surface-highest: 280 19% 89%; /* #E6E0E9 */
+  --surface: 210 50% 99%; /* #F7FAFF — slightly blue-tinted white */
+  --on-surface: 213 20% 12%;
+  --surface-variant: 210 28% 90%;
+  --on-surface-variant: 213 10% 34%;
 
-  --outline: 270 5% 47%; /* #79747E */
-  --outline-variant: 270 12% 79%; /* #CAC4D0 */
+  --surface-lowest: 0 0% 100%;
+  --surface-low: 210 35% 97%;
+  --surface-container: 210 25% 95%;
+  --surface-high: 210 22% 92%;
+  --surface-highest: 210 18% 89%;
+
+  --outline: 213 8% 48%;
+  --outline-variant: 210 18% 80%;
 
   --background: var(--surface);
   --foreground: var(--on-surface);
@@ -102,27 +102,26 @@
 }
 
 .dark {
-  /* Note: Always default to light mode unless requested. Keeping here just in case. */
-  --primary: 267 100% 84%; /* #D0BCFF */
-  --primary-foreground: 260 76% 23%; /* #381E72 */
-  --primary-container: 256 46% 36%; /* #4F378B */
-  --on-primary-container: 268 100% 92%; /* #EADDFF */
+  --primary: 211 100% 68%; /* #5EB2FF — lighter blue for dark bg */
+  --primary-foreground: 211 100% 10%;
+  --primary-container: 211 88% 22%; /* #073A72 */
+  --on-primary-container: 211 100% 90%; /* #C8E4FF */
 
-  --secondary: 263 26% 77%; /* #CCC2DC */
-  --secondary-foreground: 256 18% 25%; /* #332D41 */
-  --secondary-container: 260 16% 36%; /* #4A4458 */
-  --on-secondary-container: 263 54% 91%; /* #E8DEF8 */
+  --secondary: 213 20% 70%;
+  --secondary-foreground: 213 20% 12%;
+  --secondary-container: 213 20% 28%;
+  --on-secondary-container: 213 30% 88%;
 
-  --surface: 260 14% 8%; /* #141218 */
-  --on-surface: 280 17% 90%; /* #E6E0E9 */
-  --surface-variant: 265 11% 30%; /* #49454F */
-  --on-surface-variant: 270 12% 79%; /* #CAC4D0 */
+  --surface: 213 30% 7%; /* #0C111A — deep blue-black */
+  --on-surface: 210 18% 90%;
+  --surface-variant: 213 14% 22%;
+  --on-surface-variant: 210 12% 72%;
 
-  --surface-lowest: 260 21% 5%; /* #0F0D13 */
-  --surface-low: 260 14% 11%; /* #1D1B20 */
-  --surface-container: 260 11% 13%; /* #211F26 */
-  --surface-high: 260 10% 16%; /* #2B2930 */
-  --surface-highest: 260 10% 21%; /* #36343B */
+  --surface-lowest: 213 35% 4%;
+  --surface-low: 213 25% 10%;
+  --surface-container: 213 20% 12%;
+  --surface-high: 213 16% 16%;
+  --surface-highest: 213 13% 21%;
 
   --background: var(--surface);
   --foreground: var(--on-surface);

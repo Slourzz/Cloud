@@ -8,9 +8,9 @@ export interface ColorPalette {
 }
 
 const DEFAULT_PALETTE: ColorPalette = {
-  vibrant: [103, 80, 164],
-  dark: [18, 14, 30],
-  mid: [55, 42, 95],
+  vibrant: [10, 132, 255],   // iOS blue
+  dark: [0, 18, 52],
+  mid: [5, 65, 140],
 };
 
 function extractVibrant(img: HTMLImageElement): ColorPalette {
