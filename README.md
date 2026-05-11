@@ -62,4 +62,4 @@ Improve your music in Cloud for Windows!.
 
 ---
 
-<p align="center">Made with ❤️ by <a href="https://github.com/Gabrioff">@Gabrioff</a> & <a href="https://github.com/Slourzz">@Slourzz</a></p>
+<p align="center">Proyect by <a href="https://github.com/Slourzz">@Slourzz</a></p>
