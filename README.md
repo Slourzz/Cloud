@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="../../releases"><img src="https://img.shields.io/github/v/release/Slourzz/DarkSong?color=blueviolet&label=latest%20version" alt="Latest Version"/></a>
+  <a href="../../releases"><img src="https://img.shields.io/github/v/release/Slourzz/Cloud?color=blueviolet&label=latest%20version" alt="Latest Version"/></a>
 </p>
 
 Improve your music in Cloud for Windows!.
