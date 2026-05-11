@@ -16,11 +16,10 @@ Improve your music in Cloud for Windows!
 <tr>
 <td valign="top" width="40%">
 
-- **AI playlist creation** — Smart assistant that builds playlists for you
-- **8D Audio** — Immersive spatial sound experience
-- **Slowed mode** — Relaxed, dreamy playback
-- **Nightcore mode** — High-energy sped-up tracks
-- **Built for Android** — Smooth and optimized mobile experience
+- **Lyrics Design** — Beautiful Lyrics of your songs inspired in Apple Music
+- **Themes** — Improve your experience with our themes in the app
+- **Dynamic Interface** — Dynamic Buttons and IU based on the song cover
+- **Built for Windows** — Smooth and optimized desktop experience
 
 </td>
 <td valign="top" width="60%">
