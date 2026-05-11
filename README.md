@@ -6,7 +6,7 @@
   <a href="../../releases"><img src="https://img.shields.io/github/v/release/Slourzz/DarkSong?color=blueviolet&label=latest%20version" alt="Latest Version"/></a>
 </p>
 
-AI-powered music player for Android. Supports 8D, Slowed, and Nightcore playback modes.
+Improve your music in Cloud for Windows!.
 
 ---
 
