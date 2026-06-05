@@ -47,3 +47,33 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+$env
+set
+*.pfx
+*.pem
+*.key
+*.cert
+
+# Build artifacts and packaged apps
+*.msix
+*.appx
+*.appxbundle
+*.msi
+*.exe
+*.dmg
+*.deb
+*.rpm
+target/
+.winapp/
+
+# Local generated bundles
+artifacts/**/dist/
+artifacts/**/node_modules/
+artifacts/**/.winapp/
+artifacts/**/*.msix
+artifacts/**/*.pfx
