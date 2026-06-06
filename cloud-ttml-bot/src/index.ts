@@ -32,7 +32,22 @@ import {
 const token = process.env.DISCORD_TOKEN;
 const reviewChannelId = process.env.DISCORD_REVIEW_CHANNEL_ID;
 const port = Number(process.env.PORT ?? 8787);
-const cloudAppOrigin = process.env.CLOUD_APP_ORIGIN ?? "http://localhost:3000";
+const configuredOrigins = (
+  process.env.CLOUD_APP_ORIGINS ??
+  process.env.CLOUD_APP_ORIGIN ??
+  ""
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set([
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://tauri.localhost",
+  "https://tauri.localhost",
+  "tauri://localhost",
+  ...configuredOrigins,
+]);
 
 if (!token) {
   throw new Error("Missing DISCORD_TOKEN in .env");
@@ -59,7 +74,14 @@ const upload = multer({
 
 app.use(
   cors({
-    origin: cloudAppOrigin,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
   }),
 );
 app.use(express.json());
