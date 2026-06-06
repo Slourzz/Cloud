@@ -18,35 +18,16 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-
-type SubmissionStatus = "pending" | "approved" | "rejected";
-
-type SongPayload = {
-  id: string;
-  title: string;
-  artist: string;
-  album?: string;
-  duration?: number;
-  coverUrl?: string;
-  audioUrl?: string;
-  submittedAt?: string;
-};
-
-type TTMLSubmission = {
-  id: string;
-  song: SongPayload;
-  fileName: string;
-  ttmlContent: string;
-  status: SubmissionStatus;
-  createdAt: number;
-  messageId?: string;
-  channelId?: string;
-  moderator?: {
-    id: string;
-    name: string;
-    comment: string;
-  };
-};
+import {
+  closeSubmissionStore,
+  countSubmissions,
+  getSubmission,
+  initializeSubmissionStore,
+  isDatabaseEnabled,
+  saveSubmission,
+  type SongPayload,
+  type TTMLSubmission,
+} from "./submission-store.js";
 
 const token = process.env.DISCORD_TOKEN;
 const reviewChannelId = process.env.DISCORD_REVIEW_CHANNEL_ID;
@@ -63,8 +44,6 @@ if (!reviewChannelId) {
 
 const discordToken = token;
 const discordReviewChannelId = reviewChannelId;
-
-const submissions = new Map<string, TTMLSubmission>();
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -217,7 +196,7 @@ async function publishSubmission(submission: TTMLSubmission) {
 
   submission.channelId = channel.id;
   submission.messageId = message.id;
-  submissions.set(submission.id, submission);
+  await saveSubmission(submission);
 }
 
 function buildReviewModal(
@@ -253,11 +232,11 @@ function buildReviewModal(
 
 async function handleReviewButton(interaction: ButtonInteraction) {
   const [, action, submissionId] = interaction.customId.split(":");
-  const submission = submissions.get(submissionId);
+  const submission = await getSubmission(submissionId);
 
   if (!submission) {
     await interaction.reply({
-      content: "No encontre esta revision en memoria.",
+      content: "No encontre esta revision.",
       ephemeral: true,
     });
     return;
@@ -297,11 +276,11 @@ async function updateReviewMessage(submission: TTMLSubmission) {
 
 async function handleReviewModal(interaction: ModalSubmitInteraction) {
   const [, action, , submissionId] = interaction.customId.split(":");
-  const submission = submissions.get(submissionId);
+  const submission = await getSubmission(submissionId);
 
   if (!submission) {
     await interaction.reply({
-      content: "No encontre esta revision en memoria.",
+      content: "No encontre esta revision.",
       ephemeral: true,
     });
     return;
@@ -314,7 +293,7 @@ async function handleReviewModal(interaction: ModalSubmitInteraction) {
     name: interaction.user.globalName ?? interaction.user.username,
     comment,
   };
-  submissions.set(submission.id, submission);
+  await saveSubmission(submission);
 
   await updateReviewMessage(submission);
 
@@ -345,12 +324,23 @@ function toReviewResponse(submission: TTMLSubmission) {
   };
 }
 
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    botReady: client.isReady(),
-    submissions: submissions.size,
-  });
+app.get("/health", async (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      botReady: client.isReady(),
+      database: isDatabaseEnabled() ? "postgresql" : "memory",
+      submissions: await countSubmissions(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    res.status(503).json({
+      ok: false,
+      botReady: client.isReady(),
+      database: "unavailable",
+      error: message,
+    });
+  }
 });
 
 app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
@@ -380,7 +370,7 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
       createdAt: Date.now(),
     };
 
-    submissions.set(submission.id, submission);
+    await saveSubmission(submission);
     await publishSubmission(submission);
 
     res.status(201).json(toReviewResponse(submission));
@@ -390,8 +380,8 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
   }
 });
 
-app.get("/api/ttml/review/:submissionId", (req, res) => {
-  const submission = submissions.get(req.params.submissionId);
+app.get("/api/ttml/review/:submissionId", async (req, res) => {
+  const submission = await getSubmission(req.params.submissionId);
 
   if (!submission) {
     res.status(404).json({ error: "Submission not found" });
@@ -430,8 +420,20 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+await initializeSubmissionStore();
 await client.login(discordToken);
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Cloud TTML review API listening on http://localhost:${port}`);
 });
+
+async function shutdown(signal: string) {
+  console.log(`Received ${signal}. Closing Cloud TTML bot.`);
+  server.close();
+  client.destroy();
+  await closeSubmissionStore();
+  process.exit(0);
+}
+
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
