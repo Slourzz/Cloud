@@ -226,6 +226,32 @@ export async function getSubmission(id: string) {
   return submission;
 }
 
+export async function getPendingSubmissions() {
+  if (!pool) {
+    return [...memorySubmissions.values()].filter(
+      (submission) => submission.status === "pending",
+    );
+  }
+
+  const result = await pool.query<SubmissionRow>(`
+    SELECT
+      id,
+      song,
+      file_name,
+      ttml_content,
+      status,
+      created_at,
+      message_id,
+      channel_id,
+      moderator
+    FROM ttml_submissions
+    WHERE status = 'pending'
+    ORDER BY created_at ASC
+  `);
+
+  return result.rows.map(rowToSubmission);
+}
+
 export async function countSubmissions() {
   if (!pool) return memorySubmissions.size;
 

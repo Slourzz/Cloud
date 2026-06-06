@@ -22,6 +22,7 @@ import {
   closeSubmissionStore,
   countSubmissions,
   getApprovedSubmission,
+  getPendingSubmissions,
   getSubmission,
   initializeSubmissionStore,
   isDatabaseEnabled,
@@ -180,12 +181,12 @@ function buildReviewEmbed(submission: TTMLSubmission) {
 function buildReviewButtons(submissionId: string, disabled = false) {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`ttml:approve:${submissionId}`)
+      .setCustomId(`cloudreview:approve:${submissionId}`)
       .setLabel("Aprobar")
       .setStyle(ButtonStyle.Success)
       .setDisabled(disabled),
     new ButtonBuilder()
-      .setCustomId(`ttml:reject:${submissionId}`)
+      .setCustomId(`cloudreview:reject:${submissionId}`)
       .setLabel("Rechazar")
       .setStyle(ButtonStyle.Danger)
       .setDisabled(disabled),
@@ -227,7 +228,7 @@ function buildReviewModal(
   action: "approve" | "reject",
 ) {
   const modal = new ModalBuilder()
-    .setCustomId(`ttml:${action}:modal:${submission.id}`)
+    .setCustomId(`cloudreview:${action}:modal:${submission.id}`)
     .setTitle(action === "approve" ? "Aprobar TTML" : "Rechazar TTML");
 
   const commentInput = new TextInputBuilder()
@@ -297,6 +298,25 @@ async function updateReviewMessage(submission: TTMLSubmission) {
   });
 }
 
+async function refreshPendingReviewMessages() {
+  const pendingSubmissions = await getPendingSubmissions();
+
+  for (const submission of pendingSubmissions) {
+    try {
+      await updateReviewMessage(submission);
+    } catch (error) {
+      console.error(
+        `Could not refresh review buttons for ${submission.id}:`,
+        error,
+      );
+    }
+  }
+
+  console.log(
+    `Refreshed ${pendingSubmissions.length} pending TTML review message(s)`,
+  );
+}
+
 async function handleReviewModal(interaction: ModalSubmitInteraction) {
   const [, action, , submissionId] = interaction.customId.split(":");
   const submission = await getSubmission(submissionId);
@@ -354,6 +374,7 @@ app.get("/health", async (_req, res) => {
       botReady: client.isReady(),
       database: isDatabaseEnabled() ? "postgresql" : "memory",
       submissions: await countSubmissions(),
+      interactionProtocol: "cloudreview-v2",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -454,18 +475,22 @@ app.get("/api/ttml/review/:submissionId", async (req, res) => {
 
 client.on("ready", () => {
   console.log(`Cloud TTML bot connected as ${client.user?.tag}`);
+  void refreshPendingReviewMessages();
 });
 
 client.on("interactionCreate", async (interaction) => {
   try {
-    if (interaction.isButton() && interaction.customId.startsWith("ttml:")) {
+    if (
+      interaction.isButton() &&
+      interaction.customId.startsWith("cloudreview:")
+    ) {
       await handleReviewButton(interaction);
       return;
     }
 
     if (
       interaction.isModalSubmit() &&
-      interaction.customId.startsWith("ttml:")
+      interaction.customId.startsWith("cloudreview:")
     ) {
       await handleReviewModal(interaction);
     }
