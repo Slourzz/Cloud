@@ -23,6 +23,11 @@ Bot y API local para enviar TTMLs desde Cloud a un canal privado de Discord.
 ```env
 DISCORD_TOKEN=your_bot_token_here
 DISCORD_REVIEW_CHANNEL_ID=your_private_moderator_channel_id
+DISCORD_CLIENT_ID=your_discord_application_id
+DISCORD_CLIENT_SECRET=your_discord_oauth_client_secret
+DISCORD_GUILD_ID=your_cloud_discord_server_id
+DISCORD_REDIRECT_URI=https://your-railway-domain.up.railway.app/api/auth/discord/callback
+PUBLIC_BASE_URL=https://your-railway-domain.up.railway.app
 PORT=8787
 CLOUD_APP_ORIGIN=http://localhost:3000
 DATABASE_URL=postgresql://postgres:password@localhost:5432/cloud
@@ -83,7 +88,9 @@ Tambien agrega:
 DATABASE_SSL=false
 ```
 
-Al arrancar, el bot crea automaticamente la tabla `ttml_submissions` y sus indices.
+Al arrancar, el bot crea automaticamente las tablas de revisiones y sesiones
+de Discord. En el Developer Portal registra exactamente el valor de
+`DISCORD_REDIRECT_URI` como redirect OAuth2.
 
 Puedes comprobarlo visitando:
 

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createHash, randomBytes } from "node:crypto";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
@@ -20,13 +21,18 @@ import {
 } from "discord.js";
 import {
   closeSubmissionStore,
+  completeDiscordAuthRequest,
   countSubmissions,
+  createDiscordAuthRequest,
   getApprovedSubmission,
+  getDiscordAuthRequest,
+  getDiscordSession,
   getPendingSubmissions,
   getSubmission,
   initializeSubmissionStore,
   isDatabaseEnabled,
   saveSubmission,
+  type DiscordIdentity,
   type SongPayload,
   type TTMLSubmission,
 } from "./submission-store.js";
@@ -34,6 +40,18 @@ import {
 const token = process.env.DISCORD_TOKEN;
 const reviewChannelId = process.env.DISCORD_REVIEW_CHANNEL_ID;
 const port = Number(process.env.PORT ?? 8787);
+const discordClientId = process.env.DISCORD_CLIENT_ID;
+const discordClientSecret = process.env.DISCORD_CLIENT_SECRET;
+const discordGuildId = process.env.DISCORD_GUILD_ID;
+const publicBaseUrl = (
+  process.env.PUBLIC_BASE_URL ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : `http://localhost:${port}`)
+).replace(/\/+$/, "");
+const discordRedirectUri =
+  process.env.DISCORD_REDIRECT_URI ||
+  `${publicBaseUrl}/api/auth/discord/callback`;
 const configuredOrigins = (
   process.env.CLOUD_APP_ORIGINS ??
   process.env.CLOUD_APP_ORIGIN ??
@@ -96,6 +114,56 @@ app.use(
   }),
 );
 app.use(express.json());
+
+function hashSessionToken(tokenValue: string) {
+  return createHash("sha256").update(tokenValue).digest("hex");
+}
+
+function getBearerToken(authorization: string | undefined) {
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim();
+}
+
+async function getAuthenticatedDiscordUser(
+  authorization: string | undefined,
+) {
+  const sessionToken = getBearerToken(authorization);
+  if (!sessionToken) return undefined;
+  return getDiscordSession(hashSessionToken(sessionToken));
+}
+
+function getDiscordAvatarUrl(user: {
+  id: string;
+  avatar?: string | null;
+}) {
+  if (!user.avatar) return undefined;
+  const extension = user.avatar.startsWith("a_") ? "gif" : "png";
+  return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${extension}?size=128`;
+}
+
+function renderOAuthResult(title: string, message: string, success: boolean) {
+  const color = success ? "#a7f3d0" : "#fecaca";
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111114; color: white; font: 16px system-ui, sans-serif; }
+      main { width: min(460px, calc(100vw - 40px)); text-align: center; }
+      h1 { color: ${color}; margin-bottom: 10px; }
+      p { color: rgba(255,255,255,.7); line-height: 1.55; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${title}</h1>
+      <p>${message}</p>
+    </main>
+  </body>
+</html>`;
+}
 
 function createSubmissionId() {
   return `ttml_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -163,6 +231,7 @@ function buildReviewEmbed(submission: TTMLSubmission) {
         `**Album:** ${submission.song.album || "Desconocido"}`,
         `**Duracion:** ${formatDuration(submission.song.duration)}`,
         `**Archivo:** ${submission.fileName}`,
+        `**Enviado por:** ${submission.submitter ? `@${submission.submitter.displayName}` : "Usuario sin identificar"}`,
         `**Estado:** ${resultText.title}`,
       ].join("\n"),
     )
@@ -391,6 +460,7 @@ app.get("/health", async (_req, res) => {
       submissions: await countSubmissions(),
       interactionProtocol: "railwayreview-v3",
       interactionNamespace,
+      discordOAuth: Boolean(discordClientId && discordClientSecret),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -403,10 +473,200 @@ app.get("/health", async (_req, res) => {
   }
 });
 
+app.post("/api/auth/discord/start", async (_req, res) => {
+  if (!discordClientId || !discordClientSecret) {
+    res.status(503).json({
+      error:
+        "Discord OAuth is not configured. Add DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET.",
+    });
+    return;
+  }
+
+  const state = randomBytes(24).toString("hex");
+  await createDiscordAuthRequest(state);
+
+  const authorizeUrl = new URL("https://discord.com/oauth2/authorize");
+  authorizeUrl.searchParams.set("client_id", discordClientId);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("redirect_uri", discordRedirectUri);
+  authorizeUrl.searchParams.set(
+    "scope",
+    discordGuildId ? "identify guilds.join" : "identify",
+  );
+  authorizeUrl.searchParams.set("state", state);
+  authorizeUrl.searchParams.set("prompt", "consent");
+
+  res.json({
+    state,
+    authorizeUrl: authorizeUrl.toString(),
+  });
+});
+
+app.get("/api/auth/discord/callback", async (req, res) => {
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+
+  try {
+    if (!discordClientId || !discordClientSecret || !code || !state) {
+      throw new Error("La autorizacion de Discord esta incompleta.");
+    }
+
+    const authRequest = await getDiscordAuthRequest(state);
+    if (!authRequest || authRequest.status !== "pending") {
+      throw new Error("Esta solicitud de inicio de sesion vencio.");
+    }
+
+    const tokenBody = new URLSearchParams({
+      client_id: discordClientId,
+      client_secret: discordClientSecret,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: discordRedirectUri,
+    });
+    const tokenResponse = await fetch(
+      "https://discord.com/api/v10/oauth2/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: tokenBody,
+      },
+    );
+    if (!tokenResponse.ok) {
+      throw new Error("Discord no pudo completar el inicio de sesion.");
+    }
+
+    const tokenData = (await tokenResponse.json()) as {
+      access_token?: string;
+    };
+    if (!tokenData.access_token) {
+      throw new Error("Discord no devolvio un token de acceso.");
+    }
+
+    const userResponse = await fetch(
+      "https://discord.com/api/v10/users/@me",
+      {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+      },
+    );
+    if (!userResponse.ok) {
+      throw new Error("No fue posible obtener tu perfil de Discord.");
+    }
+
+    const discordUser = (await userResponse.json()) as {
+      id: string;
+      username: string;
+      global_name?: string | null;
+      avatar?: string | null;
+    };
+    const user: DiscordIdentity = {
+      id: discordUser.id,
+      username: discordUser.username,
+      displayName: discordUser.global_name || discordUser.username,
+      avatarUrl: getDiscordAvatarUrl(discordUser),
+    };
+
+    if (discordGuildId) {
+      const joinResponse = await fetch(
+        `https://discord.com/api/v10/guilds/${discordGuildId}/members/${discordUser.id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bot ${discordToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            access_token: tokenData.access_token,
+          }),
+        },
+      );
+      if (!joinResponse.ok && joinResponse.status !== 204) {
+        console.warn(
+          `Could not add Discord user ${discordUser.id} to guild: ${joinResponse.status}`,
+        );
+      }
+    }
+
+    const sessionToken = randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + 90 * 24 * 60 * 60 * 1000;
+    await completeDiscordAuthRequest(
+      state,
+      sessionToken,
+      hashSessionToken(sessionToken),
+      user,
+      expiresAt,
+    );
+
+    res
+      .status(200)
+      .type("html")
+      .send(
+        renderOAuthResult(
+          "Discord conectado",
+          `Ya puedes volver a Cloud. Tus TTML se enviaran como ${user.displayName}.`,
+          true,
+        ),
+      );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo conectar Discord.";
+    res
+      .status(400)
+      .type("html")
+      .send(renderOAuthResult("No se pudo conectar Discord", message, false));
+  }
+});
+
+app.get("/api/auth/discord/session/:state", async (req, res) => {
+  const authRequest = await getDiscordAuthRequest(req.params.state);
+  if (!authRequest) {
+    res.status(404).json({ error: "Discord login request not found" });
+    return;
+  }
+
+  if (
+    authRequest.status !== "complete" ||
+    !authRequest.sessionToken ||
+    !authRequest.user
+  ) {
+    res.json({ status: "pending" });
+    return;
+  }
+
+  res.json({
+    status: "complete",
+    token: authRequest.sessionToken,
+    user: authRequest.user,
+  });
+});
+
+app.get("/api/auth/discord/me", async (req, res) => {
+  const user = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "Discord session is not valid" });
+    return;
+  }
+
+  res.json({ user });
+});
+
 app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
   try {
     if (!client.isReady()) {
       res.status(503).json({ error: "Discord bot is not ready yet" });
+      return;
+    }
+
+    const submitter = await getAuthenticatedDiscordUser(
+      req.headers.authorization,
+    );
+    if (!submitter) {
+      res.status(401).json({
+        error: "Inicia sesion con Discord antes de enviar un TTML.",
+      });
       return;
     }
 
@@ -428,6 +688,7 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
       ttmlContent,
       status: "pending",
       createdAt: Date.now(),
+      submitter,
     };
 
     await saveSubmission(submission);
@@ -475,6 +736,13 @@ app.get("/api/ttml/approved", async (req, res) => {
     ttmlContent: submission.ttmlContent,
     approvedAt: submission.createdAt,
     moderator: submission.moderator?.name,
+    synchronizer: submission.submitter
+      ? {
+          id: submission.submitter.id,
+          name: submission.submitter.displayName,
+          avatarUrl: submission.submitter.avatarUrl,
+        }
+      : undefined,
   });
 });
 
