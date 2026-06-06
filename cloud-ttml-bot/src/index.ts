@@ -61,6 +61,15 @@ if (!reviewChannelId) {
 
 const discordToken = token;
 const discordReviewChannelId = reviewChannelId;
+const interactionNamespace = (
+  process.env.DISCORD_INTERACTION_NAMESPACE ??
+  process.env.RAILWAY_SERVICE_ID ??
+  process.env.RAILWAY_PROJECT_ID ??
+  "local"
+)
+  .replace(/[^a-zA-Z0-9_-]/g, "")
+  .slice(-20);
+const interactionPrefix = `railwayreview:${interactionNamespace}:`;
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -181,12 +190,12 @@ function buildReviewEmbed(submission: TTMLSubmission) {
 function buildReviewButtons(submissionId: string, disabled = false) {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`cloudreview:approve:${submissionId}`)
+      .setCustomId(`${interactionPrefix}approve:${submissionId}`)
       .setLabel("Aprobar")
       .setStyle(ButtonStyle.Success)
       .setDisabled(disabled),
     new ButtonBuilder()
-      .setCustomId(`cloudreview:reject:${submissionId}`)
+      .setCustomId(`${interactionPrefix}reject:${submissionId}`)
       .setLabel("Rechazar")
       .setStyle(ButtonStyle.Danger)
       .setDisabled(disabled),
@@ -228,7 +237,7 @@ function buildReviewModal(
   action: "approve" | "reject",
 ) {
   const modal = new ModalBuilder()
-    .setCustomId(`cloudreview:${action}:modal:${submission.id}`)
+    .setCustomId(`${interactionPrefix}${action}:modal:${submission.id}`)
     .setTitle(action === "approve" ? "Aprobar TTML" : "Rechazar TTML");
 
   const commentInput = new TextInputBuilder()
@@ -255,7 +264,10 @@ function buildReviewModal(
 }
 
 async function handleReviewButton(interaction: ButtonInteraction) {
-  const [, action, submissionId] = interaction.customId.split(":");
+  const [, namespace, action, submissionId] = interaction.customId.split(":");
+
+  if (namespace !== interactionNamespace) return;
+
   const submission = await getSubmission(submissionId);
 
   if (!submission) {
@@ -318,7 +330,10 @@ async function refreshPendingReviewMessages() {
 }
 
 async function handleReviewModal(interaction: ModalSubmitInteraction) {
-  const [, action, , submissionId] = interaction.customId.split(":");
+  const [, namespace, action, , submissionId] = interaction.customId.split(":");
+
+  if (namespace !== interactionNamespace) return;
+
   const submission = await getSubmission(submissionId);
 
   if (!submission) {
@@ -374,7 +389,8 @@ app.get("/health", async (_req, res) => {
       botReady: client.isReady(),
       database: isDatabaseEnabled() ? "postgresql" : "memory",
       submissions: await countSubmissions(),
-      interactionProtocol: "cloudreview-v2",
+      interactionProtocol: "railwayreview-v3",
+      interactionNamespace,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -482,7 +498,7 @@ client.on("interactionCreate", async (interaction) => {
   try {
     if (
       interaction.isButton() &&
-      interaction.customId.startsWith("cloudreview:")
+      interaction.customId.startsWith(interactionPrefix)
     ) {
       await handleReviewButton(interaction);
       return;
@@ -490,7 +506,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (
       interaction.isModalSubmit() &&
-      interaction.customId.startsWith("cloudreview:")
+      interaction.customId.startsWith(interactionPrefix)
     ) {
       await handleReviewModal(interaction);
     }
