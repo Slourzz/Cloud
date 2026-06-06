@@ -2,7 +2,7 @@ FROM node:22-slim AS build
 
 WORKDIR /app
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 
 COPY cloud-ttml-bot/package.json cloud-ttml-bot/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
