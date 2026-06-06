@@ -9,6 +9,8 @@ Bot y API local para enviar TTMLs desde Cloud a un canal privado de Discord.
 3. El moderador deja un comentario.
 4. Cloud consulta `GET /api/ttml/review/:submissionId`.
 5. La app muestra la respuesta en el panel de notificaciones.
+6. Cuando se aprueba, otras instalaciones de Cloud pueden obtenerlo con
+   `GET /api/ttml/approved?artist=...&title=...&duration=...`.
 
 ## Configuracion
 
@@ -103,4 +105,5 @@ La respuesta debe incluir:
 - Con `DATABASE_URL`, las revisiones sobreviven reinicios y redeploys.
 - Sin `DATABASE_URL`, el bot funciona con memoria temporal para desarrollo local.
 - Los TTML se guardan inicialmente como texto en PostgreSQL.
+- Solo los TTML aprobados se entregan mediante el endpoint publico.
 - El limite actual por archivo TTML es de 2 MB.

@@ -21,6 +21,7 @@ import {
 import {
   closeSubmissionStore,
   countSubmissions,
+  getApprovedSubmission,
   getSubmission,
   initializeSubmissionStore,
   isDatabaseEnabled,
@@ -400,6 +401,44 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
     const message = error instanceof Error ? error.message : "Unknown error";
     res.status(500).json({ error: message });
   }
+});
+
+app.get("/api/ttml/approved", async (req, res) => {
+  const artist =
+    typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+  const title =
+    typeof req.query.title === "string" ? req.query.title.trim() : "";
+  const durationValue =
+    typeof req.query.duration === "string"
+      ? Number(req.query.duration)
+      : undefined;
+  const duration =
+    durationValue !== undefined && Number.isFinite(durationValue)
+      ? durationValue
+      : undefined;
+
+  if (!artist || !title) {
+    res.status(400).json({ error: "Artist and title are required" });
+    return;
+  }
+
+  const submission = await getApprovedSubmission(artist, title, duration);
+
+  if (!submission) {
+    res.status(404).json({ error: "Approved TTML not found" });
+    return;
+  }
+
+  res.json({
+    id: submission.id,
+    artist: submission.song.artist,
+    title: submission.song.title,
+    duration: submission.song.duration,
+    fileName: submission.fileName,
+    ttmlContent: submission.ttmlContent,
+    approvedAt: submission.createdAt,
+    moderator: submission.moderator?.name,
+  });
 });
 
 app.get("/api/ttml/review/:submissionId", async (req, res) => {

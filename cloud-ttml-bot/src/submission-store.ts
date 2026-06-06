@@ -41,6 +41,22 @@ type SubmissionRow = QueryResultRow & {
   moderator: TTMLSubmission["moderator"] | null;
 };
 
+function normalizeSongPart(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/\b(feat|ft|featuring)\b.*$/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+export function createSongKey(artist: string, title: string) {
+  return `${normalizeSongPart(artist)}::${normalizeSongPart(title)}`;
+}
+
 const memorySubmissions = new Map<string, TTMLSubmission>();
 const databaseUrl = process.env.DATABASE_URL;
 const useSsl = process.env.DATABASE_SSL === "true";
@@ -88,8 +104,14 @@ export async function initializeSubmissionStore() {
       message_id TEXT,
       channel_id TEXT,
       moderator JSONB,
+      song_key TEXT,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE ttml_submissions
+    ADD COLUMN IF NOT EXISTS song_key TEXT
   `);
 
   await pool.query(`
@@ -101,6 +123,27 @@ export async function initializeSubmissionStore() {
     CREATE INDEX IF NOT EXISTS ttml_submissions_created_at_idx
     ON ttml_submissions (created_at DESC)
   `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS ttml_submissions_song_key_idx
+    ON ttml_submissions (song_key, status)
+  `);
+
+  const missingKeys = await pool.query<{
+    id: string;
+    song: SongPayload;
+  }>(`
+    SELECT id, song
+    FROM ttml_submissions
+    WHERE song_key IS NULL
+  `);
+
+  for (const row of missingKeys.rows) {
+    await pool.query(
+      "UPDATE ttml_submissions SET song_key = $1 WHERE id = $2",
+      [createSongKey(row.song.artist, row.song.title), row.id],
+    );
+  }
 
   console.log("PostgreSQL submission store connected");
 }
@@ -122,9 +165,10 @@ export async function saveSubmission(submission: TTMLSubmission) {
         message_id,
         channel_id,
         moderator,
+        song_key,
         updated_at
       )
-      VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
+      VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, NOW())
       ON CONFLICT (id) DO UPDATE SET
         song = EXCLUDED.song,
         file_name = EXCLUDED.file_name,
@@ -133,6 +177,7 @@ export async function saveSubmission(submission: TTMLSubmission) {
         message_id = EXCLUDED.message_id,
         channel_id = EXCLUDED.channel_id,
         moderator = EXCLUDED.moderator,
+        song_key = EXCLUDED.song_key,
         updated_at = NOW()
     `,
     [
@@ -145,6 +190,7 @@ export async function saveSubmission(submission: TTMLSubmission) {
       submission.messageId ?? null,
       submission.channelId ?? null,
       submission.moderator ? JSON.stringify(submission.moderator) : null,
+      createSongKey(submission.song.artist, submission.song.title),
     ],
   );
 }
@@ -187,6 +233,60 @@ export async function countSubmissions() {
     "SELECT COUNT(*)::text AS count FROM ttml_submissions",
   );
   return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function getApprovedSubmission(
+  artist: string,
+  title: string,
+  duration?: number,
+) {
+  const songKey = createSongKey(artist, title);
+
+  if (!pool) {
+    return [...memorySubmissions.values()]
+      .filter(
+        (submission) =>
+          submission.status === "approved" &&
+          createSongKey(submission.song.artist, submission.song.title) ===
+            songKey,
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .find(
+        (submission) =>
+          !duration ||
+          !submission.song.duration ||
+          Math.abs(submission.song.duration - duration) <= 5,
+      );
+  }
+
+  const result = await pool.query<SubmissionRow>(
+    `
+      SELECT
+        id,
+        song,
+        file_name,
+        ttml_content,
+        status,
+        created_at,
+        message_id,
+        channel_id,
+        moderator
+      FROM ttml_submissions
+      WHERE song_key = $1
+        AND status = 'approved'
+      ORDER BY updated_at DESC
+      LIMIT 10
+    `,
+    [songKey],
+  );
+
+  const submissions = result.rows.map(rowToSubmission);
+  return submissions.find(
+    (submission) =>
+      !duration ||
+      !submission.song.duration ||
+      Math.abs(submission.song.duration - duration) <= 5,
+  );
 }
 
 export function isDatabaseEnabled() {
