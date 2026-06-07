@@ -141,26 +141,105 @@ function getDiscordAvatarUrl(user: {
   return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${extension}?size=128`;
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function renderOAuthResult(title: string, message: string, success: boolean) {
-  const color = success ? "#a7f3d0" : "#fecaca";
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
+  const deepLink = "cloud://discord-connected";
+  const action = success
+    ? `<a class="open-cloud" href="${deepLink}">Abrir Cloud</a>
+      <p class="hint">Si Cloud no se abre automaticamente, usa el boton.</p>`
+    : `<p class="hint">Puedes cerrar esta ventana e intentarlo de nuevo desde Cloud.</p>`;
+  const autoOpen = success
+    ? `<script>
+      window.addEventListener("load", () => {
+        window.setTimeout(() => {
+          window.location.href = "${deepLink}";
+        }, 250);
+      });
+    </script>`
+    : "";
+
   return `<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${title}</title>
+    <meta name="color-scheme" content="dark" />
+    <title>${safeTitle}</title>
     <style>
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111114; color: white; font: 16px system-ui, sans-serif; }
-      main { width: min(460px, calc(100vw - 40px)); text-align: center; }
-      h1 { color: ${color}; margin-bottom: 10px; }
-      p { color: rgba(255,255,255,.7); line-height: 1.55; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #101014;
+        color: #fff;
+        font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(480px, calc(100vw - 40px));
+        text-align: center;
+        animation: appear .45s ease-out both;
+      }
+      h1 {
+        margin: 0 0 10px;
+        color: #fff;
+        font-size: clamp(1.9rem, 5vw, 2.45rem);
+        letter-spacing: 0;
+      }
+      p {
+        margin: 0;
+        color: rgba(255,255,255,.82);
+      }
+      .open-cloud {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 150px;
+        min-height: 46px;
+        margin-top: 28px;
+        padding: 0 22px;
+        border-radius: 8px;
+        background: #fff;
+        color: #111114;
+        font-weight: 750;
+        text-decoration: none;
+        transition: transform .18s ease, opacity .18s ease;
+      }
+      .open-cloud:hover { transform: translateY(-2px); }
+      .open-cloud:active { transform: translateY(0); opacity: .86; }
+      .hint {
+        margin-top: 14px;
+        color: rgba(255,255,255,.58);
+        font-size: .86rem;
+      }
+      @keyframes appear {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        main { animation: none; }
+        .open-cloud { transition: none; }
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>${title}</h1>
-      <p>${message}</p>
+      <h1>${safeTitle}</h1>
+      <p>${safeMessage}</p>
+      ${action}
     </main>
+    ${autoOpen}
   </body>
 </html>`;
 }
