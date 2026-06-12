@@ -40,8 +40,10 @@ const CAST_SCRIPT_URL =
   "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
 const CAST_LAYOUT_KEY = "cloud.cast.layout";
 const CAST_LYRICS_KEY = "cloud.cast.lyrics-format";
+const CAST_LOAD_TIMEOUT_MS = 8_000;
 const RECEIVER_APPLICATION_ID =
   import.meta.env.VITE_GOOGLE_CAST_APP_ID?.trim() ?? "";
+let castFrameworkPromise: Promise<void> | null = null;
 
 const fallbackContext: CastContextValue = {
   status: "unavailable",
@@ -75,32 +77,63 @@ function getCurrentCastSession() {
 
 function loadCastFramework() {
   if ((window as any).cast?.framework) return Promise.resolve();
+  if (castFrameworkPromise) return castFrameworkPromise;
 
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${CAST_SCRIPT_URL}"]`,
-    );
+  castFrameworkPromise = new Promise<void>((resolve, reject) => {
+    let settled = false;
     const previousCallback = (window as any).__onGCastApiAvailable;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      if (error) {
+        castFrameworkPromise = null;
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
 
     (window as any).__onGCastApiAvailable = (available: boolean) => {
       previousCallback?.(available);
-      if (available) resolve();
-      else reject(new Error("Google Cast no esta disponible."));
+      if (available && (window as any).cast?.framework) finish();
+      else
+        finish(
+          new Error(
+            "Google Cast no esta disponible en este navegador o WebView.",
+          ),
+        );
     };
 
-    if (existing) {
-      existing.addEventListener("error", () =>
-        reject(new Error("No se pudo cargar Google Cast.")),
+    const timeout = window.setTimeout(() => {
+      finish(
+        new Error(
+          "Google Cast no respondio. Comprueba que Cloud y el dispositivo Cast esten en la misma red.",
+        ),
       );
+    }, CAST_LOAD_TIMEOUT_MS);
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${CAST_SCRIPT_URL}"]`,
+    );
+    if (existing) {
+      existing.addEventListener(
+        "error",
+        () => finish(new Error("No se pudo cargar Google Cast.")),
+        { once: true },
+      );
+      if ((window as any).cast?.framework) finish();
       return;
     }
 
     const script = document.createElement("script");
     script.src = CAST_SCRIPT_URL;
     script.async = true;
-    script.onerror = () => reject(new Error("No se pudo cargar Google Cast."));
+    script.onerror = () => finish(new Error("No se pudo cargar Google Cast."));
     document.head.appendChild(script);
   });
+
+  return castFrameworkPromise;
 }
 
 async function imageToReceiverSource(url?: string) {
@@ -167,6 +200,11 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     await loadCastFramework();
     const framework = (window as any).cast.framework;
     const context = framework.CastContext.getInstance();
+    if (!context || typeof context.requestSession !== "function") {
+      throw new Error(
+        "Este motor web no ofrece el selector de dispositivos Google Cast.",
+      );
+    }
     context.setOptions({
       receiverApplicationId: RECEIVER_APPLICATION_ID,
       autoJoinPolicy:
@@ -244,7 +282,16 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
       const configured = await configureCast();
       if (!configured) return;
       setStatus("connecting");
-      await getCastContext()?.requestSession?.();
+      const context = getCastContext();
+      if (!context || typeof context.requestSession !== "function") {
+        throw new Error(
+          "Este motor web no ofrece el selector de dispositivos Google Cast.",
+        );
+      }
+      await context.requestSession();
+      if (!getCurrentCastSession()) {
+        throw new Error("No se selecciono ningun dispositivo Google Cast.");
+      }
       setStatus("connected");
       setMessage("Transmitiendo en Google Cast.");
     } catch (error) {

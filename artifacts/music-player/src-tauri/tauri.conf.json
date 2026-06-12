@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost blob: data: https: https://*.mzstatic.com https://*.dzcdn.net https://*.wikimedia.org https://*.wikipedia.org https://*.apple.com https://*.theaudiodb.com https://*.discogs.com; connect-src 'self' https: http://localhost:8787 http://127.0.0.1:8787; media-src 'self' blob:; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; script-src 'self' https://www.gstatic.com; img-src 'self' asset: http://asset.localhost blob: data: https: https://*.mzstatic.com https://*.dzcdn.net https://*.wikimedia.org https://*.wikipedia.org https://*.apple.com https://*.theaudiodb.com https://*.discogs.com; connect-src 'self' https: http://localhost:8787 http://127.0.0.1:8787; media-src 'self' blob:; style-src 'self' 'unsafe-inline'",
       "assetProtocol": {
         "enable": true,
         "scope": ["**"]

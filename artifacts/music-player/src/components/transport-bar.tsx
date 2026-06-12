@@ -240,7 +240,6 @@ export function TransportBar({
     if (cast.message && cast.status !== "connected") {
       cast.dismissMessage();
       setCastPopoverOpen(false);
-      return;
     }
     if (cast.status === "connected") {
       await cast.disconnect();
