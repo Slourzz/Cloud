@@ -28,21 +28,48 @@ export function CreatePlaylistDialog({ open, onClose, editPlaylist }: CreatePlay
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setCustomCoverUrl(url);
-    setCoverTemplate("custom");
-    e.target.value = "";
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSize = 800;
+        let { width, height } = img;
+        if (width > height && width > maxSize) {
+          height *= maxSize / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width *= maxSize / height;
+          height = maxSize;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        setCustomCoverUrl(dataUrl);
+        setCoverTemplate('custom');
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleSubmit = () => {
-    if (!title.trim()) return;
-    if (editPlaylist) {
-      updatePlaylist(editPlaylist.id, { title: title.trim(), coverTemplate, customCoverUrl, sortBy });
-    } else {
-      createPlaylist({ title: title.trim(), coverTemplate, customCoverUrl, songIds: [], sortBy });
-    }
-    onClose();
-  };
+  if (!title.trim()) return;
+  console.log('Guardando playlist con customCoverUrl:', customCoverUrl?.substring(0, 80) + '...'); // solo muestra el inicio
+  if (editPlaylist) {
+    updatePlaylist(editPlaylist.id, { title: title.trim(), coverTemplate, customCoverUrl, sortBy });
+  } else {
+    createPlaylist({ title: title.trim(), coverTemplate, customCoverUrl, songIds: [], sortBy });
+  }
+  onClose();
+};
+
 
   const previewStyle = customCoverUrl
     ? { backgroundImage: `url(${customCoverUrl})`, backgroundSize: "cover", backgroundPosition: "center" }

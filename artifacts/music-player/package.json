@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
+    "build": "cross-env PORT=3000 BASE_PATH=/ vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "tauri": "tauri"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -44,6 +45,8 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
+    "@tauri-apps/cli": "^2.11.1",
+    "@types/d3-ease": "^3.0.2",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -52,10 +55,13 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
+    "cross-env": "^10.1.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "catalog:",
     "input-otp": "^1.4.2",
+    "jss": "^10.10.0",
+    "jss-preset-default": "^10.10.0",
     "lucide-react": "catalog:",
     "next-themes": "^0.4.6",
     "react": "catalog:",
@@ -73,5 +79,24 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@applemusic-like-lyrics/core": "^0.4.2",
+    "@applemusic-like-lyrics/lyric": "^1.0.0",
+    "@applemusic-like-lyrics/react": "^0.4.2",
+    "@iconify/react": "^6.0.2",
+    "@kawarp/core": "^1.1.1",
+    "@lit/react": "^1.0.8",
+    "@splinetool/react-spline": "^4.1.0",
+    "@splinetool/runtime": "^1.12.94",
+    "@tauri-apps/api": "2",
+    "@tauri-apps/plugin-deep-link": "~2.4.9",
+    "@tauri-apps/plugin-opener": "~2.5.4",
+    "@uimaxbai/am-lyrics": "^1.4.1",
+    "@vibrant/core": "^4.0.4",
+    "cubic-spline": "^3.0.3",
+    "d3-ease": "^3.0.1",
+    "tauri-plugin-media-api": "^0.1.1",
+    "use-image-color": "^0.0.9"
   }
 }

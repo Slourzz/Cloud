@@ -1,0 +1,55 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Cloud",
+  "version": "2.0.0",
+  "identifier": "com.cloudapp.slourzz",
+  "build": {
+    "frontendDist": "../dist/public",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
+  },
+  "app": {
+    "windows": [
+      {
+        "decorations": false,
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Cloud",
+        "width": 1200,
+        "backgroundColor": "#000000",
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost blob: data: https: https://*.mzstatic.com https://*.dzcdn.net https://*.wikimedia.org https://*.wikipedia.org https://*.apple.com https://*.theaudiodb.com https://*.discogs.com; connect-src 'self' https: http://localhost:8787 http://127.0.0.1:8787; media-src 'self' blob:; style-src 'self' 'unsafe-inline'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["cloud"]
+      }
+    }
+  },
+
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": ["public/**/*"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    }
+  }
+}

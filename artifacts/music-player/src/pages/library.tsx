@@ -4,7 +4,15 @@ import { Search, Play, Camera, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Library() {
-  const { allSongs, currentSong, play, isPlaying, updateSongCover, deleteSong, isLoadingLibrary } = useMusicPlayer();
+  const {
+    allSongs,
+    currentSong,
+    play,
+    isPlaying,
+    updateSongCover,
+    deleteSong,
+    isLoadingLibrary,
+  } = useMusicPlayer();
   const [search, setSearch] = useState("");
   const [coveringSongId, setCoveringSongId] = useState<string | null>(null);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
@@ -15,7 +23,7 @@ export default function Library() {
     (s) =>
       s.title.toLowerCase().includes(search.toLowerCase()) ||
       s.artist.toLowerCase().includes(search.toLowerCase()) ||
-      s.album.toLowerCase().includes(search.toLowerCase())
+      s.album.toLowerCase().includes(search.toLowerCase()),
   );
 
   const formatTime = (seconds: number) => {
@@ -30,7 +38,9 @@ export default function Library() {
     coverInputRef.current?.click();
   };
 
-  const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     const songId = pendingCoverSongIdRef.current;
     if (!file || !songId) return;
@@ -49,7 +59,7 @@ export default function Library() {
   };
 
   return (
-    <div className="h-full flex flex-col page-enter">
+    <div className="cloud-themed-page h-full flex flex-col page-enter">
       {/* Hidden cover image input */}
       <input
         ref={coverInputRef}
@@ -62,14 +72,20 @@ export default function Library() {
       {/* Sticky header */}
       <div
         className="sticky top-0 z-10 px-8 pt-8 pb-4 border-b border-outline-variant/15"
-        style={{ background: "hsl(var(--background) / 0.85)", backdropFilter: "blur(16px)" }}
+        style={{
+          background: "hsl(var(--background) / 0.85)",
+          backdropFilter: "blur(16px)",
+        }}
       >
-        <h1 className="text-2xl font-bold text-on-surface mb-4 select-none">Biblioteca</h1>
+        <h1 className="text-2xl font-bold text-on-surface mb-4 select-none">
+          Biblioteca
+        </h1>
         <div
           className="relative flex items-center h-12 rounded-full px-4 gap-2 max-w-lg"
           style={{
             background: "hsl(var(--surface-high))",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.12), 0 0 0 1px hsl(var(--outline-variant) / 0.25)",
+            boxShadow:
+              "0 1px 3px rgba(0,0,0,0.12), 0 0 0 1px hsl(var(--outline-variant) / 0.25)",
             transition: "box-shadow 200ms ease",
           }}
         >
@@ -91,7 +107,9 @@ export default function Library() {
           )}
         </div>
         <p className="text-xs text-on-surface-variant mt-2 ml-1 select-none transition-all duration-300">
-          {isLoadingLibrary ? "Cargando..." : `${filtered.length} ${filtered.length === 1 ? "canción" : "canciones"}`}
+          {isLoadingLibrary
+            ? "Cargando..."
+            : `${filtered.length} ${filtered.length === 1 ? "canción" : "canciones"}`}
         </p>
       </div>
 
@@ -130,11 +148,12 @@ export default function Library() {
                     isCurrent
                       ? "bg-secondary-container text-on-secondary-container"
                       : "hover:bg-surface-container",
-                    isDeleting && "opacity-30 pointer-events-none scale-[0.98]"
+                    isDeleting && "opacity-30 pointer-events-none scale-[0.98]",
                   )}
                   style={{
                     animationDelay: `${Math.min(i * 18, 360)}ms`,
-                    transition: "background-color 160ms ease, opacity 300ms ease, transform 300ms cubic-bezier(0.34,1.56,0.64,1)",
+                    transition:
+                      "background-color 160ms ease, opacity 300ms ease, transform 300ms cubic-bezier(0.34,1.56,0.64,1)",
                   }}
                 >
                   {/* Index / playing indicator */}
@@ -155,16 +174,24 @@ export default function Library() {
                       </div>
                     ) : (
                       <>
-                        <span className={cn(
-                          "text-xs font-medium group-hover:opacity-0 group-hover:scale-75 transition-all duration-150",
-                          isCurrent ? "text-on-secondary-container" : "text-on-surface-variant"
-                        )}>
+                        <span
+                          className={cn(
+                            "text-xs font-medium group-hover:opacity-0 group-hover:scale-75 transition-all duration-150",
+                            isCurrent
+                              ? "text-on-secondary-container"
+                              : "text-on-surface-variant",
+                          )}
+                        >
                           {i + 1}
                         </span>
                         {!isCurrent && (
                           <Play
                             className="w-3.5 h-3.5 fill-current text-on-surface absolute opacity-0 group-hover:opacity-100 transition-all duration-150"
-                            style={{ transform: "scale(0.8)", transition: "opacity 150ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1)" }}
+                            style={{
+                              transform: "scale(0.8)",
+                              transition:
+                                "opacity 150ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1)",
+                            }}
                           />
                         )}
                       </>
@@ -179,7 +206,8 @@ export default function Library() {
                       onClick={(e) => handleCoverClick(song.id, e)}
                       title="Cambiar portada"
                       style={{
-                        transition: "transform 200ms cubic-bezier(0.34,1.56,0.64,1)",
+                        transition:
+                          "transform 200ms cubic-bezier(0.34,1.56,0.64,1)",
                       }}
                     >
                       {isCovering ? (
@@ -201,16 +229,24 @@ export default function Library() {
                     </button>
 
                     <div className="min-w-0">
-                      <p className={cn(
-                        "text-sm font-semibold truncate leading-tight",
-                        isCurrent ? "text-on-secondary-container" : "text-on-surface"
-                      )}>
+                      <p
+                        className={cn(
+                          "text-sm font-semibold truncate leading-tight",
+                          isCurrent
+                            ? "text-on-secondary-container"
+                            : "text-on-surface",
+                        )}
+                      >
                         {song.title}
                       </p>
-                      <p className={cn(
-                        "text-xs truncate leading-tight mt-0.5",
-                        isCurrent ? "text-on-secondary-container/70" : "text-on-surface-variant"
-                      )}>
+                      <p
+                        className={cn(
+                          "text-xs truncate leading-tight mt-0.5",
+                          isCurrent
+                            ? "text-on-secondary-container/70"
+                            : "text-on-surface-variant",
+                        )}
+                      >
                         {song.artist}
                         {song.isUserUploaded && (
                           <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] bg-primary-container text-on-primary-container font-bold">
@@ -222,18 +258,26 @@ export default function Library() {
                   </div>
 
                   {/* Album */}
-                  <p className={cn(
-                    "text-sm truncate select-none",
-                    isCurrent ? "text-on-secondary-container/80" : "text-on-surface-variant"
-                  )}>
+                  <p
+                    className={cn(
+                      "text-sm truncate select-none",
+                      isCurrent
+                        ? "text-on-secondary-container/80"
+                        : "text-on-surface-variant",
+                    )}
+                  >
                     {song.album}
                   </p>
 
                   {/* Duration */}
-                  <span className={cn(
-                    "text-sm text-right tabular-nums select-none",
-                    isCurrent ? "text-on-secondary-container/80" : "text-on-surface-variant"
-                  )}>
+                  <span
+                    className={cn(
+                      "text-sm text-right tabular-nums select-none",
+                      isCurrent
+                        ? "text-on-secondary-container/80"
+                        : "text-on-surface-variant",
+                    )}
+                  >
                     {formatTime(song.duration)}
                   </span>
 
@@ -245,7 +289,8 @@ export default function Library() {
                       <button
                         className="icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-500 text-on-surface-variant"
                         style={{
-                          transition: "opacity 150ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1), color 150ms ease, background-color 150ms ease",
+                          transition:
+                            "opacity 150ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1), color 150ms ease, background-color 150ms ease",
                         }}
                         onClick={(e) => handleDelete(song.id, e)}
                         title="Eliminar canción"
@@ -261,7 +306,9 @@ export default function Library() {
             {!isLoadingLibrary && filtered.length === 0 && search && (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-on-surface-variant fade-scale-in">
                 <Search className="w-12 h-12 opacity-18" />
-                <p className="text-base font-medium">Sin resultados para "{search}"</p>
+                <p className="text-base font-medium">
+                  Sin resultados para "{search}"
+                </p>
                 <button
                   onClick={() => setSearch("")}
                   className="text-sm text-primary hover:underline transition-colors"
@@ -273,8 +320,12 @@ export default function Library() {
 
             {!isLoadingLibrary && allSongs.length === 0 && !search && (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-on-surface-variant fade-scale-in">
-                <p className="text-base font-medium opacity-40">Tu biblioteca está vacía</p>
-                <p className="text-sm opacity-28">Sube canciones desde la pantalla principal</p>
+                <p className="text-base font-medium opacity-40">
+                  Tu biblioteca está vacía
+                </p>
+                <p className="text-sm opacity-28">
+                  Sube canciones desde la pantalla principal
+                </p>
               </div>
             )}
           </>

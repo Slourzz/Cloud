@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import { useMusicPlayer } from "@/hooks/use-music-player";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from "react";
+import { useOptionalMusicPlayer } from "@/hooks/use-music-player";
 
 export interface ColorPalette {
   vibrant: [number, number, number];
@@ -8,16 +15,18 @@ export interface ColorPalette {
 }
 
 const DEFAULT_PALETTE: ColorPalette = {
-  vibrant: [10, 132, 255],   // iOS blue
+  vibrant: [10, 132, 255], // iOS blue
   dark: [0, 18, 52],
   mid: [5, 65, 140],
 };
 
 function extractVibrant(img: HTMLImageElement): ColorPalette {
   try {
-    const W = 80, H = 80;
+    const W = 80,
+      H = 80;
     const canvas = document.createElement("canvas");
-    canvas.width = W; canvas.height = H;
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext("2d");
     if (!ctx) return DEFAULT_PALETTE;
     ctx.drawImage(img, 0, 0, W, H);
@@ -27,7 +36,9 @@ function extractVibrant(img: HTMLImageElement): ColorPalette {
     const buckets = new Map<string, Bucket>();
 
     for (let i = 0; i < data.length; i += 4) {
-      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const r = data[i],
+        g = data[i + 1],
+        b = data[i + 2];
       const qr = Math.round(r / 10) * 10;
       const qg = Math.round(g / 10) * 10;
       const qb = Math.round(b / 10) * 10;
@@ -68,13 +79,21 @@ function extractVibrant(img: HTMLImageElement): ColorPalette {
 
 let animFrameId: number | null = null;
 
-function animatePalette(from: ColorPalette, to: ColorPalette, onUpdate?: (p: ColorPalette) => void) {
+function animatePalette(
+  from: ColorPalette,
+  to: ColorPalette,
+  onUpdate?: (p: ColorPalette) => void,
+) {
   if (animFrameId != null) cancelAnimationFrame(animFrameId);
   const startTime = performance.now();
   const DURATION = 1800;
 
-  function ease(t: number) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
-  function lerp(a: number, b: number, t: number) { return Math.round(a + (b - a) * t); }
+  function ease(t: number) {
+    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+  }
+  function lerp(a: number, b: number, t: number) {
+    return Math.round(a + (b - a) * t);
+  }
 
   function frame(now: number) {
     const raw = (now - startTime) / DURATION;
@@ -99,7 +118,11 @@ function animatePalette(from: ColorPalette, to: ColorPalette, onUpdate?: (p: Col
       animFrameId = requestAnimationFrame(frame);
     } else {
       animFrameId = null;
-      onUpdate?.({ vibrant: [vr, vg, vb], dark: [dr, dg, db], mid: [mr, mg, mb] });
+      onUpdate?.({
+        vibrant: [vr, vg, vb],
+        dark: [dr, dg, db],
+        mid: [mr, mg, mb],
+      });
     }
   }
 
@@ -121,7 +144,7 @@ const ThemeColorsContext = createContext<ThemeColorsContextValue>({
 });
 
 export function ThemeColorsProvider({ children }: { children: ReactNode }) {
-  const { currentSong } = useMusicPlayer();
+  const currentSong = useOptionalMusicPlayer()?.currentSong ?? null;
   const paletteRef = useRef<ColorPalette>(DEFAULT_PALETTE);
   const [palette, setPalette] = useState<ColorPalette>(DEFAULT_PALETTE);
 
@@ -141,7 +164,8 @@ export function ThemeColorsProvider({ children }: { children: ReactNode }) {
   }, [currentSong?.id, currentSong?.coverUrl]);
 
   const rgb = (key: "v" | "d" | "m", opacity = 1) => {
-    const p = key === "v" ? palette.vibrant : key === "d" ? palette.dark : palette.mid;
+    const p =
+      key === "v" ? palette.vibrant : key === "d" ? palette.dark : palette.mid;
     return `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${opacity})`;
   };
 
@@ -161,7 +185,9 @@ export function ThemeColorsProvider({ children }: { children: ReactNode }) {
   });
 
   return (
-    <ThemeColorsContext.Provider value={{ palette, rgb, gradientBg, fullscreenBg }}>
+    <ThemeColorsContext.Provider
+      value={{ palette, rgb, gradientBg, fullscreenBg }}
+    >
       {children}
     </ThemeColorsContext.Provider>
   );

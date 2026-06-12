@@ -156,3 +156,44 @@
     pointer-events: none;
   }
 }
+
+/* Eliminar borde blanco del scrollbar - versión extrema */
+.custom-scrollbar, main, .sidebar-scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar,
+main::-webkit-scrollbar,
+.sidebar-scrollable::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+main::-webkit-scrollbar-track,
+.sidebar-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+main::-webkit-scrollbar-thumb,
+.sidebar-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  border: none;
+  box-shadow: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+main::-webkit-scrollbar-thumb:hover,
+.sidebar-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Forzar que el fondo de los elementos con scroll sea negro */
+.custom-scrollbar, main, .sidebar-scrollable {
+  background-color: black !important;
+}

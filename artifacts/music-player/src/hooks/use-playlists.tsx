@@ -1,10 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { dbGetAllSongs } from "@/hooks/use-song-db";
 
 export type SortBy = "newest" | "az" | "artist";
 
 export interface Playlist {
   id: string;
   title: string;
+  description?: string; // 👈 NUEVO
   coverTemplate: string;
   customCoverUrl?: string;
   songIds: string[];
@@ -13,19 +21,55 @@ export interface Playlist {
 }
 
 export const COVER_TEMPLATES = [
-  { id: "tpl-purple", label: "Púrpura", bg: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" },
-  { id: "tpl-sunset", label: "Atardecer", bg: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" },
-  { id: "tpl-ocean", label: "Océano", bg: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" },
-  { id: "tpl-forest", label: "Bosque", bg: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" },
-  { id: "tpl-gold", label: "Dorado", bg: "linear-gradient(135deg, #f6d365 0%, #fda085 100%)" },
-  { id: "tpl-night", label: "Noche", bg: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)" },
-  { id: "tpl-rose", label: "Rosa", bg: "linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)" },
-  { id: "tpl-mint", label: "Menta", bg: "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)" },
+  {
+    id: "tpl-purple",
+    label: "Púrpura",
+    bg: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  },
+  {
+    id: "tpl-sunset",
+    label: "Atardecer",
+    bg: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+  },
+  {
+    id: "tpl-ocean",
+    label: "Océano",
+    bg: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+  },
+  {
+    id: "tpl-forest",
+    label: "Bosque",
+    bg: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
+  },
+  {
+    id: "tpl-gold",
+    label: "Dorado",
+    bg: "linear-gradient(135deg, #f6d365 0%, #fda085 100%)",
+  },
+  {
+    id: "tpl-night",
+    label: "Noche",
+    bg: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+  },
+  {
+    id: "tpl-rose",
+    label: "Rosa",
+    bg: "linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)",
+  },
+  {
+    id: "tpl-mint",
+    label: "Menta",
+    bg: "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)",
+  },
 ];
 
 export function getPlaylistCoverStyle(playlist: Playlist): React.CSSProperties {
   if (playlist.customCoverUrl) {
-    return { backgroundImage: `url(${playlist.customCoverUrl})`, backgroundSize: "cover", backgroundPosition: "center" };
+    return {
+      backgroundImage: `url(${playlist.customCoverUrl})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
   }
   const tpl = COVER_TEMPLATES.find((t) => t.id === playlist.coverTemplate);
   return { background: tpl?.bg ?? COVER_TEMPLATES[0].bg };
@@ -34,7 +78,10 @@ export function getPlaylistCoverStyle(playlist: Playlist): React.CSSProperties {
 interface PlaylistsContextValue {
   playlists: Playlist[];
   createPlaylist: (data: Omit<Playlist, "id" | "createdAt">) => Playlist;
-  updatePlaylist: (id: string, data: Partial<Omit<Playlist, "id" | "createdAt">>) => void;
+  updatePlaylist: (
+    id: string,
+    data: Partial<Omit<Playlist, "id" | "createdAt">>,
+  ) => void;
   deletePlaylist: (id: string) => void;
   addSongToPlaylist: (playlistId: string, songId: string) => void;
   removeSongFromPlaylist: (playlistId: string, songId: string) => void;
@@ -42,7 +89,14 @@ interface PlaylistsContextValue {
 
 const PlaylistsContext = createContext<PlaylistsContextValue>({
   playlists: [],
-  createPlaylist: () => ({ id: "", title: "", coverTemplate: "", songIds: [], sortBy: "newest", createdAt: 0 }),
+  createPlaylist: () => ({
+    id: "",
+    title: "",
+    coverTemplate: "",
+    songIds: [],
+    sortBy: "newest",
+    createdAt: 0,
+  }),
   updatePlaylist: () => {},
   deletePlaylist: () => {},
   addSongToPlaylist: () => {},
@@ -74,7 +128,45 @@ export function PlaylistsProvider({ children }: { children: ReactNode }) {
     savePlaylists(playlists);
   }, [playlists]);
 
-  const createPlaylist = (data: Omit<Playlist, "id" | "createdAt">): Playlist => {
+  useEffect(() => {
+    const pruneMissingSongs = (validIds: Set<string>) => {
+      setPlaylists((previous) =>
+        previous.map((playlist) => {
+          const songIds = playlist.songIds.filter((id) => validIds.has(id));
+          return songIds.length === playlist.songIds.length
+            ? playlist
+            : { ...playlist, songIds };
+        }),
+      );
+    };
+
+    dbGetAllSongs()
+      .then((songs) => pruneMissingSongs(new Set(songs.map((song) => song.id))))
+      .catch(() => {});
+
+    const handleSongsRemoved = (event: Event) => {
+      const removedIds = new Set(
+        (event as CustomEvent<{ ids?: string[] }>).detail?.ids ?? [],
+      );
+      if (removedIds.size === 0) return;
+      setPlaylists((previous) =>
+        previous.map((playlist) => {
+          const songIds = playlist.songIds.filter((id) => !removedIds.has(id));
+          return songIds.length === playlist.songIds.length
+            ? playlist
+            : { ...playlist, songIds };
+        }),
+      );
+    };
+
+    window.addEventListener("cloud-songs-removed", handleSongsRemoved);
+    return () =>
+      window.removeEventListener("cloud-songs-removed", handleSongsRemoved);
+  }, []);
+
+  const createPlaylist = (
+    data: Omit<Playlist, "id" | "createdAt">,
+  ): Playlist => {
     const playlist: Playlist = {
       ...data,
       id: `playlist-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -84,8 +176,13 @@ export function PlaylistsProvider({ children }: { children: ReactNode }) {
     return playlist;
   };
 
-  const updatePlaylist = (id: string, data: Partial<Omit<Playlist, "id" | "createdAt">>) => {
-    setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+  const updatePlaylist = (
+    id: string,
+    data: Partial<Omit<Playlist, "id" | "createdAt">>,
+  ) => {
+    setPlaylists((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...data } : p)),
+    );
   };
 
   const deletePlaylist = (id: string) => {
@@ -97,22 +194,31 @@ export function PlaylistsProvider({ children }: { children: ReactNode }) {
       prev.map((p) =>
         p.id === playlistId && !p.songIds.includes(songId)
           ? { ...p, songIds: [...p.songIds, songId] }
-          : p
-      )
+          : p,
+      ),
     );
   };
 
   const removeSongFromPlaylist = (playlistId: string, songId: string) => {
     setPlaylists((prev) =>
       prev.map((p) =>
-        p.id === playlistId ? { ...p, songIds: p.songIds.filter((id) => id !== songId) } : p
-      )
+        p.id === playlistId
+          ? { ...p, songIds: p.songIds.filter((id) => id !== songId) }
+          : p,
+      ),
     );
   };
 
   return (
     <PlaylistsContext.Provider
-      value={{ playlists, createPlaylist, updatePlaylist, deletePlaylist, addSongToPlaylist, removeSongFromPlaylist }}
+      value={{
+        playlists,
+        createPlaylist,
+        updatePlaylist,
+        deletePlaylist,
+        addSongToPlaylist,
+        removeSongFromPlaylist,
+      }}
     >
       {children}
     </PlaylistsContext.Provider>

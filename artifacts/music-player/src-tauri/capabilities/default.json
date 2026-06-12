@@ -1,0 +1,29 @@
+{
+  "identifier": "default",
+  "description": "Permisos básicos para la ventana",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:event:allow-listen",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-is-maximized",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "opener:allow-default-urls",
+    "opener:allow-open-url",
+    "core:event:allow-emit",
+    "media:default",
+    "opener:default",
+    "deep-link:default"
+  ]
+}

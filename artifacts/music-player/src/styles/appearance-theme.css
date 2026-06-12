@@ -1,0 +1,401 @@
+:root {
+  --cloud-app-bg: linear-gradient(
+    135deg,
+    #1f1820 0%,
+    #171113 48%,
+    #090807 100%
+  );
+  --cloud-bg-overlay: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.015)
+  );
+  --cloud-text: #ffffff;
+  --cloud-text-muted: rgba(255, 255, 255, 0.58);
+  --cloud-surface: rgba(255, 255, 255, 0.105);
+  --cloud-surface-strong: rgba(255, 255, 255, 0.18);
+  --cloud-surface-soft: rgba(255, 255, 255, 0.07);
+  --cloud-border: rgba(255, 255, 255, 0.14);
+  --cloud-accent: #d875ff;
+  --cloud-accent-2: #ff7aa8;
+  --cloud-accent-text: #ffffff;
+  --cloud-accent-soft: rgba(216, 117, 255, 0.18);
+  --cloud-accent-ring: rgba(216, 117, 255, 0.36);
+  --cloud-blur: 28px;
+  --cloud-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  --cloud-glass-filter: blur(28px) saturate(165%);
+  --cloud-radius-sm: 12px;
+  --cloud-radius-md: 18px;
+  --cloud-radius-lg: 28px;
+}
+
+html,
+body,
+#root {
+  background: var(--cloud-app-bg);
+  color: var(--cloud-text);
+}
+
+.cloud-theme-root {
+  background: var(--cloud-app-bg);
+  color: var(--cloud-text);
+}
+
+.cloud-theme-overlay {
+  background: var(--cloud-bg-overlay);
+}
+
+.cloud-surface {
+  background: var(--cloud-surface);
+  border: 1px solid var(--cloud-border);
+  box-shadow: var(--cloud-shadow);
+  backdrop-filter: var(--cloud-glass-filter);
+  -webkit-backdrop-filter: var(--cloud-glass-filter);
+}
+
+.cloud-surface-soft {
+  background: var(--cloud-surface-soft);
+  border: 1px solid var(--cloud-border);
+}
+
+.cloud-accent {
+  color: var(--cloud-accent);
+}
+
+.cloud-glass-card {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.045)
+    ),
+    var(--cloud-surface);
+  border: 1px solid var(--cloud-border);
+  box-shadow:
+    var(--cloud-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  backdrop-filter: var(--cloud-glass-filter);
+  -webkit-backdrop-filter: var(--cloud-glass-filter);
+}
+
+.cloud-progress-track {
+  background: var(--cloud-progress-track);
+}
+
+.cloud-progress-fill {
+  background: var(--cloud-progress-fill);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.22);
+}
+
+.cloud-themed-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.34) rgba(255, 255, 255, 0.08);
+}
+
+.cloud-themed-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cloud-themed-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.42),
+    rgba(255, 255, 255, 0.2)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.cloud-accent-bg {
+  background: linear-gradient(
+    135deg,
+    var(--cloud-accent),
+    var(--cloud-accent-2)
+  );
+  color: var(--cloud-accent-text);
+}
+
+[data-cloud-interface="simplyui"] body,
+[data-cloud-interface="simplyui"] #root,
+[data-cloud-interface="simplyui"] .cloud-theme-root {
+  background: #141414;
+  color: #f5f5f5;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main {
+  background: #141414 !important;
+  color: #f5f5f5;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main > * {
+  background-color: #141414;
+}
+
+[data-cloud-interface="simplyui"] .cloud-surface,
+[data-cloud-interface="simplyui"] .cloud-glass-card,
+[data-cloud-interface="simplyui"] .app-navigation-menu {
+  background: #1d1d1f !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-cloud-interface="simplyui"] .app-navigation-scroll {
+  padding-top: 0.75rem;
+}
+
+[data-cloud-interface="simplyui"] .app-nav-item {
+  border-radius: 10px !important;
+  font-weight: 800;
+}
+
+[data-cloud-interface="simplyui"] .app-nav-subitem {
+  border-radius: 8px !important;
+}
+
+[data-cloud-interface="simplyui"] .app-navigation-footer {
+  display: none;
+}
+
+[data-cloud-interface="simplyui"] .home-page {
+  background: #141414;
+  color: #f5f5f5;
+}
+
+[data-cloud-interface="simplyui"] .home-page .premium-float,
+[data-cloud-interface="simplyui"] .home-page .bg-white\/10.blur-3xl,
+[data-cloud-interface="simplyui"] .home-page .bg-white\/18.blur-3xl {
+  display: none;
+}
+
+[data-cloud-interface="simplyui"] .home-page .premium-hero,
+[data-cloud-interface="simplyui"] .home-page .premium-search,
+[data-cloud-interface="simplyui"] .home-page .premium-results,
+[data-cloud-interface="simplyui"] .home-page .premium-card,
+[data-cloud-interface="simplyui"] .home-page .rounded-\[28px\][style] {
+  background: #202020 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-cloud-interface="simplyui"] .home-page .premium-card,
+[data-cloud-interface="simplyui"] .home-page .premium-card:nth-child(3n + 2),
+[data-cloud-interface="simplyui"] .home-page .premium-card:nth-child(3n),
+[data-cloud-interface="simplyui"] .home-page .premium-card:hover {
+  transform: none !important;
+}
+
+[data-cloud-interface="simplyui"] .home-page .premium-card:hover {
+  background: #242424 !important;
+}
+
+[data-cloud-interface="simplyui"] .home-page .text-white,
+[data-cloud-interface="simplyui"] .home-page [class*="text-white/"] {
+  color: #f5f5f5 !important;
+}
+
+[data-cloud-interface="simplyui"]
+  .home-page
+  .placeholder-white\/55::placeholder {
+  color: rgba(245, 245, 245, 0.38) !important;
+}
+
+[data-cloud-interface="simplyui"] .home-page .bg-gradient-to-br,
+[data-cloud-interface="simplyui"] .home-page .bg-gradient-to-t,
+[data-cloud-interface="simplyui"] .home-page .bg-gradient-to-b,
+[data-cloud-interface="simplyui"] .home-page .bg-gradient-to-r {
+  background-image: none !important;
+}
+
+[data-cloud-interface="simplyui"] .home-page .premium-linear-row {
+  mask-image: none;
+  scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.08);
+}
+
+[data-cloud-interface="simplyui"]
+  .home-page
+  .premium-linear-row::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-cloud-interface="simplyui"]
+  .home-page
+  .premium-linear-row::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.34);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-cloud-interface="simplyui"] .home-page .premium-carousel-button {
+  background: #2a2a2a !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #f5f5f5 !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .sticky,
+[data-cloud-interface="simplyui"] .cloud-app-main [style*="backdrop-filter"],
+[data-cloud-interface="simplyui"] .cloud-app-main [style*="blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-cloud-interface="simplyui"]
+  .cloud-app-main
+  [style*="hsl(var(--background)"] {
+  background: #141414 !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-primary,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-primary-container {
+  background: #f5f5f5 !important;
+  color: #111111 !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-secondary-container,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-surface,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-surface-low,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-surface-container,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-surface-high,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-surface-highest,
+[data-cloud-interface="simplyui"] .cloud-app-main .m3-card {
+  background: #202020 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .rounded-\[28px\],
+[data-cloud-interface="simplyui"] .cloud-app-main .rounded-\[32px\] {
+  border-radius: 18px !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .rounded-2xl,
+[data-cloud-interface="simplyui"] .cloud-app-main .rounded-\[20px\] {
+  border-radius: 14px !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .text-white,
+[data-cloud-interface="simplyui"] .cloud-app-main [class*="text-white/"],
+[data-cloud-interface="simplyui"] .cloud-app-main .text-on-surface,
+[data-cloud-interface="simplyui"] .cloud-app-main .text-on-secondary-container {
+  color: #f5f5f5 !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .text-on-primary-container,
+[data-cloud-interface="simplyui"] .cloud-app-main .text-black {
+  color: #111111 !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .text-on-surface-variant,
+[data-cloud-interface="simplyui"]
+  .cloud-app-main
+  [class*="text-on-surface-variant/"] {
+  color: rgba(245, 245, 245, 0.58) !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .border-white\/20,
+[data-cloud-interface="simplyui"] .cloud-app-main .border-outline-variant\/20,
+[data-cloud-interface="simplyui"] .cloud-app-main .border-outline-variant\/30 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .shadow-xl,
+[data-cloud-interface="simplyui"] .cloud-app-main .shadow-2xl,
+[data-cloud-interface="simplyui"] .cloud-app-main .elevation-1,
+[data-cloud-interface="simplyui"] .cloud-app-main .elevation-2,
+[data-cloud-interface="simplyui"] .cloud-app-main .elevation-3 {
+  box-shadow: none !important;
+}
+
+[data-cloud-interface="simplyui"]
+  .cloud-app-main
+  .group:hover
+  .group-hover\:shadow-xl {
+  box-shadow: none !important;
+}
+
+[data-cloud-interface="simplyui"]
+  .cloud-app-main
+  .group-hover\:scale-\[0\.97\]:hover,
+[data-cloud-interface="simplyui"] .cloud-app-main .hover\:scale-110:hover {
+  transform: none !important;
+}
+
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-black\/20,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-black\/30,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-black\/40,
+[data-cloud-interface="simplyui"] .cloud-app-main .bg-black\/55 {
+  background: rgba(0, 0, 0, 0.72) !important;
+}
+
+[data-cloud-interface="simplyui"] .settings-scroll,
+[data-cloud-interface="simplyui"] .settings-category-row,
+[data-cloud-interface="simplyui"] .settings-card,
+[data-cloud-interface="simplyui"] .settings-section {
+  color: #f5f5f5;
+}
+
+[data-cloud-interface="simplyui"] .settings-scroll .text-white,
+[data-cloud-interface="simplyui"] .settings-scroll [class*="text-white/"] {
+  color: #f5f5f5 !important;
+}
+
+[data-cloud-interface="simplyui"] .settings-scroll [style*="rgba(255,255,255"],
+[data-cloud-interface="simplyui"] .settings-scroll .settings-category-row {
+  background: #202020 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+[data-cloud-interface="simplyui"] .sideplayer-scroll,
+[data-cloud-interface="simplyui"] .sideplayer-mode-panel {
+  color: #f5f5f5;
+}
+
+[data-cloud-interface="simplyui"] .premium-card {
+  transform: none !important;
+}
+
+[data-cloud-background="dynamic-background"] .settings-panel-root {
+  background: transparent !important;
+}
+
+[data-cloud-background="dynamic-background"] .settings-panel-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(8, 8, 8, 0.42);
+}
+
+[data-cloud-interface="simplyui"] .settings-panel-root {
+  background: #141414 !important;
+}
+
+[data-cloud-interface="simplyui"] .settings-panel-root::before {
+  display: none;
+}
+[data-cloud-background="dynamic-background"] .cloud-app-main,
+[data-cloud-background="dynamic-background"] .cloud-app-main > *,
+[data-cloud-background="dynamic-background"] .home-page {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+[data-cloud-background="dynamic-background"] .cloud-home-dynamic-background {
+  mix-blend-mode: normal;
+}
+
+[data-cloud-background="dynamic-background"] .home-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgba(4, 4, 5, 0.06);
+}
+
+[data-cloud-interface="simplyui"] .cloud-home-dynamic-background {
+  display: none !important;
+}

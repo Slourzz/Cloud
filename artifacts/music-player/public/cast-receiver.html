@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Cloud Cast</title>
+    <link rel="stylesheet" href="/cast-receiver.css" />
+  </head>
+  <body>
+    <div id="background" class="cast-background"></div>
+    <div class="cast-shade"></div>
+
+    <main id="stage" class="cast-stage layout-cover theme-crystalized">
+      <section class="now-playing">
+        <img id="cover" class="cover" alt="" />
+        <div class="song-copy">
+          <h1 id="title">Cloud</h1>
+          <p id="artist">Esperando una canci&oacute;n</p>
+        </div>
+      </section>
+
+      <section id="lyrics" class="lyrics" aria-live="polite"></section>
+
+      <section class="progress-shell">
+        <span id="elapsed">0:00</span>
+        <div class="progress-track">
+          <div id="progress" class="progress-fill"></div>
+        </div>
+        <span id="duration">0:00</span>
+      </section>
+
+      <aside id="next-song" class="next-song" hidden>
+        <p>Canci&oacute;n siguiente</p>
+        <div>
+          <img id="next-cover" alt="" />
+          <span>
+            <strong id="next-title"></strong>
+            <small id="next-artist"></small>
+          </span>
+        </div>
+      </aside>
+
+      <img
+        class="cloud-mark"
+        src="/cloud-cast-mark.png"
+        alt="Cloud"
+        draggable="false"
+      />
+    </main>
+
+    <script>
+      (function () {
+        var preview = new URLSearchParams(window.location.search).has(
+          "preview",
+        );
+        var appScript = document.createElement("script");
+        appScript.src = "/cast-receiver.js";
+
+        if (preview) {
+          document.body.appendChild(appScript);
+          return;
+        }
+
+        var castScript = document.createElement("script");
+        castScript.src =
+          "https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js";
+        castScript.onload = function () {
+          document.body.appendChild(appScript);
+        };
+        document.head.appendChild(castScript);
+      })();
+    </script>
+  </body>
+</html>

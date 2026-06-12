@@ -1,8 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap");
 
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
+
+/* ── Reset global (sin bordes, sin márgenes) ── */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: black;
+  overflow: hidden; /* evita cualquier barra de desplazamiento que deje una línea */
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -32,7 +44,7 @@
   --color-on-surface: hsl(var(--on-surface));
   --color-surface-variant: hsl(var(--surface-variant));
   --color-on-surface-variant: hsl(var(--on-surface-variant));
-  
+
   --color-surface-lowest: hsl(var(--surface-lowest));
   --color-surface-low: hsl(var(--surface-low));
   --color-surface-container: hsl(var(--surface-container));
@@ -42,8 +54,8 @@
   --color-outline: hsl(var(--outline));
   --color-outline-variant: hsl(var(--outline-variant));
 
-  --font-sans: 'Roboto Flex', sans-serif;
-  --font-heading: 'Google Sans', 'Roboto Flex', sans-serif;
+  --font-sans: "Roboto Flex", sans-serif;
+  --font-heading: "Google Sans", "Roboto Flex", sans-serif;
 
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -132,14 +144,20 @@
 }
 
 @layer base {
+  /* Ya NO aplicamos borde a todos los elementos */
   * {
-    @apply border-border;
+    /* @apply border-border; */ /* ← ELIMINADO */
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20 selection:text-primary;
+    @apply font-sans antialiased bg-black text-foreground selection:bg-primary/20 selection:text-primary;
     -webkit-tap-highlight-color: transparent;
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-heading);
   }
 
@@ -154,17 +172,20 @@
 /* ── Global button press feel ── */
 @layer base {
   button {
-    transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
-                opacity 120ms ease,
-                background-color 150ms ease,
-                box-shadow 200ms ease,
-                color 150ms ease;
+    transition:
+      transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 120ms ease,
+      background-color 150ms ease,
+      box-shadow 200ms ease,
+      color 150ms ease;
   }
   button:active:not(:disabled) {
     transform: scale(0.94);
   }
   a {
-    transition: opacity 150ms ease, color 150ms ease;
+    transition:
+      opacity 150ms ease,
+      color 150ms ease;
   }
 }
 
@@ -188,25 +209,34 @@
     opacity: 0.04;
   }
   .ripple:active::after {
-    opacity: 0.10;
+    opacity: 0.1;
     transition: opacity 60ms ease;
   }
 
   /* ── Elevations ── */
   .elevation-1 {
-    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.25), 0px 1px 3px 1px rgba(0, 0, 0, 0.12);
+    box-shadow:
+      0px 1px 2px 0px rgba(0, 0, 0, 0.25),
+      0px 1px 3px 1px rgba(0, 0, 0, 0.12);
   }
   .elevation-2 {
-    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.25), 0px 2px 6px 2px rgba(0, 0, 0, 0.12);
+    box-shadow:
+      0px 1px 2px 0px rgba(0, 0, 0, 0.25),
+      0px 2px 6px 2px rgba(0, 0, 0, 0.12);
   }
   .elevation-3 {
-    box-shadow: 0px 2px 4px 0px rgba(0, 0, 0, 0.25), 0px 6px 14px 4px rgba(0, 0, 0, 0.12);
+    box-shadow:
+      0px 2px 4px 0px rgba(0, 0, 0, 0.25),
+      0px 6px 14px 4px rgba(0, 0, 0, 0.12);
   }
 
   /* ── Cards ── */
   .m3-card {
     @apply bg-surface-low rounded-[12px] border border-transparent;
-    transition: background-color 200ms ease, box-shadow 200ms ease, transform 200ms cubic-bezier(0.34,1.56,0.64,1);
+    transition:
+      background-color 200ms ease,
+      box-shadow 200ms ease,
+      transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .m3-card:hover {
     @apply bg-surface-container;
@@ -217,7 +247,9 @@
     background: rgb(var(--dyn-v)) !important;
     border-color: rgb(var(--dyn-v)) !important;
     box-shadow: 0 0 0 3px rgb(var(--dyn-v) / 0.22) !important;
-    transition: box-shadow 200ms ease, transform 150ms cubic-bezier(0.34,1.56,0.64,1) !important;
+    transition:
+      box-shadow 200ms ease,
+      transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   }
   .dynamic-slider [role="slider"]:hover {
     transform: scale(1.18) !important;
@@ -250,8 +282,14 @@
     animation: page-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes page-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* ── Stagger list items ── */
@@ -259,8 +297,14 @@
     animation: stagger-in 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes stagger-in {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* ── Slide up ── */
@@ -268,8 +312,14 @@
     animation: slide-up 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes slide-up {
-    from { opacity: 0; transform: translateY(16px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   /* ── Fade scale in ── */
@@ -277,8 +327,14 @@
     animation: fade-scale-in 240ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
   @keyframes fade-scale-in {
-    from { opacity: 0; transform: scale(0.92); }
-    to   { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   /* ── Album art glow pulse when playing ── */
@@ -286,8 +342,16 @@
     animation: art-glow 3.5s ease-in-out infinite alternate;
   }
   @keyframes art-glow {
-    from { box-shadow: 0 28px 70px rgb(var(--dyn-d) / 0.50), 0 0 0 1px rgb(var(--dyn-v) / 0.08); }
-    to   { box-shadow: 0 36px 90px rgb(var(--dyn-d) / 0.70), 0 0 40px rgb(var(--dyn-v) / 0.18); }
+    from {
+      box-shadow:
+        0 28px 70px rgb(var(--dyn-d) / 0.5),
+        0 0 0 1px rgb(var(--dyn-v) / 0.08);
+    }
+    to {
+      box-shadow:
+        0 36px 90px rgb(var(--dyn-d) / 0.7),
+        0 0 40px rgb(var(--dyn-v) / 0.18);
+    }
   }
 
   /* ── Play button pulse ── */
@@ -295,8 +359,17 @@
     animation: play-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
   @keyframes play-pulse {
-    0%, 100% { box-shadow: 0 4px 18px rgb(var(--dyn-v) / 0.5), 0 0 0 0 rgb(var(--dyn-v) / 0.3); }
-    50%       { box-shadow: 0 4px 22px rgb(var(--dyn-v) / 0.65), 0 0 0 8px rgb(var(--dyn-v) / 0); }
+    0%,
+    100% {
+      box-shadow:
+        0 4px 18px rgb(var(--dyn-v) / 0.5),
+        0 0 0 0 rgb(var(--dyn-v) / 0.3);
+    }
+    50% {
+      box-shadow:
+        0 4px 22px rgb(var(--dyn-v) / 0.65),
+        0 0 0 8px rgb(var(--dyn-v) / 0);
+    }
   }
 
   /* ── Nav item active indicator ── */
@@ -304,27 +377,49 @@
     animation: dot-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
   @keyframes dot-in {
-    from { transform: scaleX(0); }
-    to   { transform: scaleX(1); }
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
   }
 
   /* ── Waveform bars dancing ── */
   @keyframes waveform {
-    0%, 100% { transform: scaleY(0.4); }
-    50%      { transform: scaleY(1); }
+    0%,
+    100% {
+      transform: scaleY(0.4);
+    }
+    50% {
+      transform: scaleY(1);
+    }
   }
 
   /* ── Lyrics bounce dots ── */
   @keyframes lyric-dot-bounce {
-    0%   { transform: translateY(0px);   opacity: 0.4; }
-    35%  { transform: translateY(-12px); opacity: 1;   }
-    65%  { transform: translateY(-12px); opacity: 1;   }
-    100% { transform: translateY(0px);   opacity: 0.4; }
+    0% {
+      transform: translateY(0px);
+      opacity: 0.4;
+    }
+    35% {
+      transform: translateY(-12px);
+      opacity: 1;
+    }
+    65% {
+      transform: translateY(-12px);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(0px);
+      opacity: 0.4;
+    }
   }
 
   /* ── Shimmer loading ── */
   .shimmer {
-    background: linear-gradient(90deg,
+    background: linear-gradient(
+      90deg,
       hsl(var(--surface-high)) 25%,
       hsl(var(--surface-highest)) 50%,
       hsl(var(--surface-high)) 75%
@@ -333,18 +428,23 @@
     animation: shimmer 1.6s infinite;
   }
   @keyframes shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
 
   /* ── Icon button base — smooth transition ── */
   .icon-btn {
     @apply flex items-center justify-center rounded-full transition-all duration-150 select-none;
-    transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
-                background-color 150ms ease,
-                box-shadow 200ms ease,
-                color 150ms ease,
-                opacity 150ms ease;
+    transition:
+      transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 150ms ease,
+      box-shadow 200ms ease,
+      color 150ms ease,
+      opacity 150ms ease;
   }
   .icon-btn:hover {
     transform: scale(1.06);
@@ -352,4 +452,170 @@
   .icon-btn:active {
     transform: scale(0.92);
   }
+}
+
+/* Eliminar bordes residuales */
+main,
+.main-content,
+.page-container,
+div[role="main"],
+section,
+article {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Quitar outline de foco en todos los elementos interactivos */
+button:focus,
+a:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* AMLL Lyrics centering */
+.amll-lyric-player {
+  text-align: center !important;
+}
+.amll-lyric-line {
+  text-align: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+.amll-lyric-line-words {
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+}
+
+/* Desactiva la selección de texto en toda la app */
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Prevenir áreas muertas al redimensionar */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Forzar que todos los elementos de fondo cubran la pantalla */
+[class*="Background"] {
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+/* Asegurar que el contenido ocupe toda la altura sin huecos */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+}
+
+/* Forzar que el contenedor principal siempre ocupe todo el viewport */
+#root {
+  min-height: 100vh;
+  min-width: 100vw;
+}
+
+/* Asegurar que el contenido siempre ocupe toda la altura real del viewport */
+html,
+body,
+#root {
+  width: 100vw;
+  height: 100dvh;
+  min-width: 100vw;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+  color: white;
+}
+
+/* Shared page surfaces keep both interface themes coherent. */
+.cloud-themed-page {
+  color: var(--cloud-text);
+  background-color: transparent;
+}
+
+html[data-cloud-interface="crystalized"] .cloud-themed-page > .sticky {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0.045)
+    ),
+    var(--cloud-surface) !important;
+  border-color: var(--cloud-border) !important;
+  backdrop-filter: var(--cloud-glass-filter) !important;
+  -webkit-backdrop-filter: var(--cloud-glass-filter) !important;
+}
+
+html[data-cloud-interface="simplyui"] .cloud-themed-page {
+  background: #141414 !important;
+}
+
+html[data-cloud-interface="simplyui"] .cloud-themed-page > .sticky {
+  background: #181818 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-cloud-interface="crystalized"] .cloud-themed-page button,
+html[data-cloud-interface="crystalized"] .cloud-themed-page [role="button"] {
+  border-color: var(--cloud-border);
+}
+
+html[data-cloud-interface="simplyui"] .cloud-themed-page button,
+html[data-cloud-interface="simplyui"] .cloud-themed-page [role="button"] {
+  box-shadow: none !important;
+}
+
+html[data-cloud-interface="crystalized"] .cloud-themed-panel,
+html[data-cloud-interface="crystalized"] .cloud-themed-list > * {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0.045)
+    ),
+    var(--cloud-surface) !important;
+  border: 1px solid var(--cloud-border) !important;
+  backdrop-filter: var(--cloud-glass-filter) !important;
+  -webkit-backdrop-filter: var(--cloud-glass-filter) !important;
+}
+
+html[data-cloud-interface="simplyui"] .cloud-detail-banner {
+  background: #1a1a1a !important;
+}
+
+html[data-cloud-interface="simplyui"] .cloud-detail-banner > .absolute {
+  opacity: 0.28 !important;
+  filter: saturate(0.35) contrast(0.9) !important;
+}
+
+html[data-cloud-interface="simplyui"] .cloud-themed-panel,
+html[data-cloud-interface="simplyui"] .cloud-themed-list > * {
+  background: #202020 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
