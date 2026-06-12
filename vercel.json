@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --prod=false",
+  "buildCommand": "pnpm --filter @workspace/music-player build",
+  "outputDirectory": "artifacts/music-player/dist/public",
+  "framework": null
+}
