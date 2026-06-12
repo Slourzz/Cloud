@@ -1,0 +1,5 @@
+[build]
+  publish = "dist"
+
+[build.environment]
+  BASE_PATH = "/"
