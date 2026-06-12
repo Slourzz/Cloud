@@ -45,6 +45,10 @@ const RECEIVER_APPLICATION_ID =
   import.meta.env.VITE_GOOGLE_CAST_APP_ID?.trim() ?? "";
 let castFrameworkPromise: Promise<void> | null = null;
 
+function isTauriRuntime() {
+  return Boolean((window as any).__TAURI_INTERNALS__);
+}
+
 const fallbackContext: CastContextValue = {
   status: "unavailable",
   message: "",
@@ -275,6 +279,13 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
       setStatus("unavailable");
       setMessage(
         "Google Cast aun no esta habilitado en esta compilacion de Cloud.",
+      );
+      return;
+    }
+    if (isTauriRuntime()) {
+      setStatus("unavailable");
+      setMessage(
+        "Google Cast no puede descubrir dispositivos desde WebView2. La TV y el Wi-Fi estan bien; Cloud necesita usar el emisor nativo de Windows.",
       );
       return;
     }
