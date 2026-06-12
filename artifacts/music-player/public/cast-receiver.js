@@ -29,6 +29,27 @@
   var nextTitle = document.getElementById("next-title");
   var nextArtist = document.getElementById("next-artist");
   var lastActiveLine = -1;
+  var kawarp = null;
+  var kawarpReady = import("/kawarp-core.js")
+    .then(function (module) {
+      kawarp = new module.default(background, {
+        warpIntensity: 1,
+        blurPasses: 8,
+        animationSpeed: 0.08,
+        saturation: 1.5,
+        dithering: 0.008,
+        transitionDuration: 1000,
+        tintIntensity: 0,
+        scale: 1,
+      });
+      kawarp.start();
+      return kawarp;
+    })
+    .catch(function (error) {
+      console.warn("Cloud Cast Receiver: Kawarp no pudo iniciarse.", error);
+      return null;
+    });
+  var loadedBackground = "";
 
   function formatTime(seconds) {
     if (!Number.isFinite(seconds)) return "0:00";
@@ -107,8 +128,8 @@
     }
 
     lastActiveLine = activeIndex;
-    var from = Math.max(0, activeIndex - 1);
-    var to = Math.min(state.lyrics.length, activeIndex + 4);
+    var from = Math.max(0, activeIndex - 2);
+    var to = Math.min(state.lyrics.length, activeIndex + 3);
     var fragment = document.createDocumentFragment();
     for (var index = from; index < to; index += 1) {
       fragment.appendChild(
@@ -126,9 +147,13 @@
       title.textContent = state.song.title || "Cloud";
       artist.textContent = state.song.artist || "Artista desconocido";
       cover.src = state.song.cover || "";
-      background.style.backgroundImage = state.song.cover
-        ? 'url("' + state.song.cover.replace(/"/g, "%22") + '")'
-        : "";
+      cover.classList.toggle("is-empty", !state.song.cover);
+      if (state.song.cover && state.song.cover !== loadedBackground) {
+        loadedBackground = state.song.cover;
+        kawarpReady.then(function (renderer) {
+          renderer?.loadImage(loadedBackground).catch(function () {});
+        });
+      }
     }
 
     if (state.nextSong) {
@@ -139,6 +164,15 @@
 
     lastActiveLine = -1;
   }
+
+  document.addEventListener("visibilitychange", function () {
+    if (!kawarp) return;
+    if (document.hidden) {
+      kawarp.stop();
+    } else {
+      kawarp.start();
+    }
+  });
 
   function renderFrame() {
     var currentTime = estimatedProgress();
@@ -181,17 +215,23 @@
   }
 
   function enablePreview() {
+    var requestedLayout = new URLSearchParams(window.location.search).get(
+      "layout",
+    );
     state = Object.assign({}, state, {
+      layout: ["cover", "linear", "split"].includes(requestedLayout)
+        ? requestedLayout
+        : state.layout,
       song: {
         title: "Lifeline",
         artist: "KawaiiKittyKore",
-        cover: "/cloud-cast-mark.png",
+        cover: "/album2.png",
         duration: 199,
       },
       nextSong: {
         title: "Popbobrobpotson",
         artist: "KawaiiKittyKore",
-        cover: "/cloud-cast-mark.png",
+        cover: "/album1.png",
       },
       progress: 182,
       duration: 199,

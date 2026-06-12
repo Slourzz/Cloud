@@ -28,44 +28,30 @@ body {
 .cast-background,
 .cast-shade {
   position: fixed;
-  inset: -8%;
+  inset: 0;
 }
 
 .cast-background {
-  background: #182033 center / cover no-repeat;
-  filter: blur(70px) saturate(1.55) brightness(0.95);
-  transform: scale(1.18);
-  transition: background-image 900ms ease;
-  animation: cloud-cast-drift 18s ease-in-out infinite alternate;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #101522;
+  filter: saturate(1.35) brightness(0.92) contrast(1.04);
 }
 
 .cast-shade {
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(7, 8, 13, 0.12), rgba(7, 8, 13, 0.28)),
-    linear-gradient(115deg, rgba(255, 255, 255, 0.08), transparent 46%);
-}
-
-@keyframes cloud-cast-drift {
-  0% {
-    transform: scale(1.18) translate3d(-1.5%, -1%, 0);
-    filter: blur(70px) saturate(1.5) brightness(0.86);
-  }
-  50% {
-    transform: scale(1.25) translate3d(1.5%, 1%, 0);
-    filter: blur(82px) saturate(1.75) brightness(0.96);
-  }
-  100% {
-    transform: scale(1.2) translate3d(-0.5%, 1.5%, 0);
-    filter: blur(74px) saturate(1.62) brightness(0.9);
-  }
+    radial-gradient(circle at 24% 32%, rgba(255, 255, 255, 0.055), transparent 30%),
+    radial-gradient(circle at 78% 14%, rgba(255, 255, 255, 0.045), transparent 34%),
+    linear-gradient(135deg, rgba(8, 6, 6, 0.2), rgba(5, 5, 8, 0.32));
 }
 
 .cast-stage {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 7vh 7vw;
+  padding: 4rem 9vw 2.5rem;
   display: grid;
   z-index: 1;
 }
@@ -88,12 +74,18 @@ body {
 
 .cover {
   display: block;
-  width: min(36vw, 46vh);
+  width: min(31vw, 42vh);
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 3.2vh;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 3.5vh 9vh rgba(0, 0, 0, 0.28);
+  border: 0;
+  outline: 0;
+  border-radius: 2.2vh;
+  background: transparent;
+  box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.22);
+}
+
+.cover.is-empty {
+  opacity: 0;
 }
 
 .song-copy {
@@ -109,7 +101,7 @@ body {
 }
 
 .song-copy h1 {
-  font-size: clamp(2rem, 4vw, 5rem);
+  font-size: clamp(1.8rem, 3vw, 3.8rem);
   line-height: 1.04;
   font-weight: 850;
   letter-spacing: 0;
@@ -117,7 +109,7 @@ body {
 
 .song-copy p {
   margin-top: 1.2vh;
-  font-size: clamp(1rem, 2vw, 2.4rem);
+  font-size: clamp(0.95rem, 1.45vw, 1.8rem);
   color: rgba(255, 255, 255, 0.72);
   font-weight: 650;
 }
@@ -131,9 +123,9 @@ body {
 }
 
 .lyric-line {
-  margin: 0 0 1.5vh;
-  font-size: clamp(2rem, 4.3vw, 5.2rem);
-  line-height: 1.12;
+  margin: 0 0 1.15vh;
+  font-size: clamp(1.6rem, 3.25vw, 4rem);
+  line-height: 1.1;
   font-weight: 850;
   color: rgba(255, 255, 255, 0.22);
   filter: blur(2px);
@@ -199,17 +191,31 @@ body {
 .layout-cover {
   grid-template-rows: 1fr auto;
   justify-items: center;
-  padding-bottom: 10vh;
+  padding-bottom: 6vh;
 }
 
 .layout-cover .now-playing {
-  align-self: end;
+  align-self: center;
   flex-direction: column;
   text-align: center;
 }
 
+.layout-cover .cover {
+  width: min(620px, 32vw);
+}
+
 .layout-cover .song-copy {
-  width: min(64vw, 900px);
+  width: min(620px, 48vw);
+  margin-top: 2rem;
+}
+
+.layout-cover .song-copy h1 {
+  font-size: 2.65rem;
+}
+
+.layout-cover .song-copy p {
+  margin-top: 0.75rem;
+  font-size: 1.5rem;
 }
 
 .layout-cover .lyrics {
@@ -217,48 +223,60 @@ body {
 }
 
 .layout-cover .progress-shell {
-  width: min(44vw, 720px);
-  align-self: start;
-  margin-top: 3vh;
+  position: absolute;
+  left: 50%;
+  bottom: 2.5rem;
+  width: min(620px, 48vw);
+  transform: translateX(-50%);
 }
 
 .layout-linear {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 3vh;
-  padding-inline: 16vw;
+  display: block;
 }
 
 .layout-linear .now-playing {
+  position: absolute;
+  top: 4rem;
+  left: 18vw;
   align-items: center;
+  gap: 2.25rem;
+  z-index: 2;
 }
 
 .layout-linear .cover {
-  width: min(12vw, 17vh);
-  border-radius: 1.6vh;
+  width: 10rem;
+  border-radius: 0.75rem;
 }
 
 .layout-linear .song-copy h1 {
+  max-width: 560px;
   font-size: clamp(2rem, 3vw, 4rem);
 }
 
 .layout-linear .song-copy p {
+  margin-top: 0.75rem;
+  max-width: 560px;
   font-size: clamp(1rem, 1.5vw, 2rem);
 }
 
 .layout-linear .lyrics {
-  width: 100%;
+  position: absolute;
+  inset: 15rem 18vw 5rem;
+  justify-content: flex-start;
 }
 
 .layout-linear .progress-shell {
-  width: 100%;
+  position: absolute;
+  right: 18vw;
+  bottom: 2.5rem;
+  left: 18vw;
 }
 
 .layout-split {
-  grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.18fr);
+  grid-template-columns: minmax(420px, 0.92fr) minmax(0, 1.08fr);
   grid-template-rows: minmax(0, 1fr) auto;
-  column-gap: 6vw;
-  row-gap: 4vh;
+  column-gap: 5vw;
+  row-gap: 2rem;
 }
 
 .layout-split .now-playing {
@@ -266,27 +284,42 @@ body {
   flex-direction: column;
   justify-content: center;
   text-align: center;
+  padding-bottom: 2.5rem;
+}
+
+.layout-split .cover {
+  width: min(620px, 34vw);
 }
 
 .layout-split .song-copy {
   width: 100%;
+  margin-top: 2rem;
 }
 
 .layout-split .song-copy h1 {
-  font-size: clamp(2rem, 3.3vw, 4.2rem);
+  font-size: 2.55rem;
+}
+
+.layout-split .song-copy p {
+  margin-top: 0.75rem;
+  font-size: 1.5rem;
 }
 
 .layout-split .lyrics {
   min-height: 0;
+  padding-block: 5vh;
 }
 
 .layout-split .lyric-line {
-  font-size: clamp(2rem, 3.6vw, 4.6rem);
+  max-width: min(760px, 46vw);
+  margin-bottom: clamp(0.1rem, 0.38vh, 0.42rem);
+  font-size: clamp(2.55rem, 3.25vw, 4.35rem);
+  line-height: 1.2;
 }
 
 .layout-split .progress-shell {
   grid-column: 1 / -1;
-  width: min(72vw, 1200px);
+  width: min(82vw, 1380px);
   justify-self: center;
 }
 
