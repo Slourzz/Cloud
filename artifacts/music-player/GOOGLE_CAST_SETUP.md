@@ -11,8 +11,28 @@ configurar ningun ID.
 3. Copia el App ID asignado por Google en `.env.local`:
 
    ```env
-   VITE_GOOGLE_CAST_APP_ID=TU_APP_ID_DE_CLOUD
-   ```
+VITE_GOOGLE_CAST_APP_ID=TU_APP_ID_DE_CLOUD
+```
+
+## Probar un receiver sin publicar
+
+Mientras el Custom Receiver siga sin publicar, Google solamente permite abrirlo
+en dispositivos Cast registrados para desarrollo.
+
+1. Abre Google Cast SDK Developer Console.
+2. En `Cast Receiver Devices`, pulsa `Add New Device`.
+3. Registra el numero de serie **Cast** de la TV. En Android TV no uses el
+   numero de serie del hardware: abre `Ajustes > Sistema > Cast` o
+   `Ajustes > Preferencias del dispositivo > Google Cast` y copia el numero de
+   serie de software.
+4. Espera hasta que el dispositivo indique `Ready for Testing` (Google
+   recomienda esperar unos 15 minutos).
+5. Reinicia completamente la TV o el dispositivo Cast.
+6. Abre de nuevo Cloud e intenta transmitir.
+
+El error `Unable to launch app: NOT_FOUND` significa que el dispositivo encontro
+Cloud en la red, pero Google Cast todavia no reconoce el App ID para esa TV.
+Cuando el receiver se publique, ya no sera necesario registrar cada dispositivo.
 
 4. Reinicia el servidor de desarrollo o vuelve a compilar la aplicacion.
 

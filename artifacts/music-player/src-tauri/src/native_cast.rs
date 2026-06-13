@@ -119,10 +119,22 @@ pub async fn connect_cast_device(
         .await
         .map_err(|error| format!("No se pudo conectar al dispositivo: {error}"))?;
 
+    let receiver_app_id = app_id.trim().to_uppercase();
     let app = receiver
-        .launch_app(AppId::Custom(app_id))
+        .launch_app(AppId::Custom(receiver_app_id.clone()))
         .await
-        .map_err(|error| format!("No se pudo abrir Cloud en la TV: {error}"))?;
+        .map_err(|error| {
+            let detail = error.to_string();
+            if detail.contains("NOT_FOUND") {
+                format!(
+                    "La TV no tiene autorizado el receptor Cast de Cloud ({receiver_app_id}). \
+                     Si la aplicacion aun no esta publicada, registra el numero de serie Cast \
+                     de esta TV en Google Cast SDK Developer Console, espera 15 minutos y reinicia la TV."
+                )
+            } else {
+                format!("No se pudo abrir Cloud en la TV: {detail}")
+            }
+        })?;
 
     *active_session = Some(NativeCastSession { receiver, app });
     Ok(())
