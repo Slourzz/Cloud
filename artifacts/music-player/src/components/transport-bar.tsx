@@ -14,19 +14,22 @@ import {
   Volume2,
   VolumeX,
   SlidersHorizontal,
+  LayoutDashboard,
+  MonitorOff,
+  ImageIcon,
+  Rows3,
+  Columns2,
   LoaderCircle,
   Tv2,
 } from "lucide-react";
 import { useMusicPlayer } from "@/hooks/use-music-player";
 import { cn } from "@/lib/utils";
-import {
-  useAppearance,
-  type LyricsAnimationFormat,
-} from "@/providers/appearance-provider";
+import { useAppearance } from "@/providers/appearance-provider";
 import {
   useGoogleCast,
   type CastDevice,
   type CastLayout,
+  type CastLyricMode,
 } from "@/hooks/use-google-cast";
 
 interface TransportBarProps {
@@ -249,8 +252,8 @@ export function TransportBar({
       cast.dismissMessage();
     }
     if (cast.status === "connected") {
-      await cast.disconnect();
-      setCastPopoverOpen(false);
+      setCastPopoverOpen((open) => !open);
+      setVolumePopoverOpen(false);
       return;
     }
     if (cast.native) {
@@ -485,6 +488,10 @@ export function TransportBar({
                   lyricFormat={cast.lyricFormat}
                   onLayoutChange={cast.setLayout}
                   onLyricFormatChange={cast.setLyricFormat}
+                  onDisconnect={async () => {
+                    await cast.disconnect();
+                    setCastPopoverOpen(false);
+                  }}
                 />
               ) : (
                 <CastDevicePopover
@@ -625,7 +632,7 @@ export function TransportBar({
                   style={iconButtonStyle}
                   aria-label={
                     cast.status === "connected"
-                      ? "Detener transmision"
+                      ? "Opciones de transmision"
                       : "Transmitir"
                   }
                   aria-pressed={cast.status === "connected"}
@@ -659,10 +666,7 @@ export function TransportBar({
                       aria-label="Organizacion de Cast"
                       aria-expanded={castPopoverOpen}
                     >
-                      <SlidersHorizontal
-                        className="h-5 w-5"
-                        strokeWidth={1.8}
-                      />
+                      <LayoutDashboard className="h-5 w-5" strokeWidth={1.8} />
                     </button>
                   </div>
                 ) : null}
@@ -987,48 +991,93 @@ function CastSettingsPopover({
   lyricFormat,
   onLayoutChange,
   onLyricFormatChange,
+  onDisconnect,
 }: {
   isSimplyUI: boolean;
   layout: CastLayout;
-  lyricFormat: LyricsAnimationFormat;
+  lyricFormat: CastLyricMode;
   onLayoutChange: (layout: CastLayout) => void;
-  onLyricFormatChange: (format: LyricsAnimationFormat) => void;
+  onLyricFormatChange: (format: CastLyricMode) => void;
+  onDisconnect: () => Promise<void>;
 }) {
-  const layoutOptions: Array<[CastLayout, string]> = [
-    ["cover", "Sin letras"],
-    ["linear", "Lineal"],
-    ["split", "Dividido"],
+  const layoutOptions: Array<{
+    value: CastLayout;
+    label: string;
+    description: string;
+    icon: typeof ImageIcon;
+  }> = [
+    {
+      value: "cover",
+      label: "Portada",
+      description: "Sin letras",
+      icon: ImageIcon,
+    },
+    {
+      value: "linear",
+      label: "Lineal",
+      description: "Letras amplias",
+      icon: Rows3,
+    },
+    {
+      value: "split",
+      label: "Dividido",
+      description: "Portada y letras",
+      icon: Columns2,
+    },
   ];
-  const lyricOptions: Array<[LyricsAnimationFormat, string]> = [
-    ["line-words", "Word by word"],
-    ["line", "Linea completa"],
-    ["letters", "Palabra por palabra"],
+  const lyricOptions: Array<[CastLyricMode, string]> = [
+    ["static", "Letras estaticas"],
+    ["line", "Lineal vertical"],
+    ["letters", "Palabras de izquierda a derecha"],
+    ["line-words", "Lineal por palabras"],
   ];
 
   return (
     <div
       className={cn(
-        "w-72 p-4 text-left",
+        "animate-in fade-in slide-in-from-bottom-2 w-80 p-4 text-left text-white duration-300",
         isSimplyUI
           ? "rounded-lg border border-white/10 bg-[#242424] shadow-xl"
           : "rounded-2xl border border-white/18 bg-black/30 shadow-2xl backdrop-blur-2xl",
       )}
     >
-      <p className="text-xs font-black uppercase text-white/46">Organizacion</p>
-      <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-white/7 p-1">
-        {layoutOptions.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => onLayoutChange(value)}
-            className={cn(
-              "min-h-10 rounded-lg px-2 text-[10px] font-black leading-tight text-white/54 transition",
-              layout === value && "bg-white/16 text-white",
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black">Vista en la TV</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-white/48">
+            Cambia la composicion sin detener la musica
+          </p>
+        </div>
+        <SlidersHorizontal className="h-5 w-5 text-white/68" />
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {layoutOptions.map((option) => {
+          const Icon = option.icon;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onLayoutChange(option.value)}
+              className={cn(
+                "group flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-center transition-all duration-300",
+                layout === option.value
+                  ? "border-white/42 bg-white/18 text-white shadow-lg"
+                  : "border-white/8 bg-white/5 text-white/54 hover:-translate-y-0.5 hover:border-white/22 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <Icon
+                className="h-6 w-6 transition-transform duration-300 group-hover:scale-105"
+                strokeWidth={1.7}
+              />
+              <span className="text-[11px] font-black leading-tight">
+                {option.label}
+              </span>
+              <span className="text-[9px] font-semibold leading-tight text-white/42">
+                {option.description}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <p className="mt-4 text-xs font-black uppercase text-white/46">
@@ -1051,6 +1100,14 @@ function CastSettingsPopover({
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={() => void onDisconnect()}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2.5 text-xs font-bold text-white/70 transition hover:border-white/22 hover:bg-white/12 hover:text-white"
+      >
+        <MonitorOff className="h-4 w-4" />
+        Detener transmision
+      </button>
     </div>
   );
 }

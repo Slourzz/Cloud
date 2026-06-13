@@ -1,12 +1,22 @@
+use axum::{
+    body::Body,
+    extract::{Path, State as AxumState},
+    http::{header, HeaderMap, Response, StatusCode},
+    routing::get,
+    Router,
+};
 use cast_sender::namespace::{Custom, NamespaceUrn};
 use cast_sender::{App, AppId, Receiver};
 use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::net::{IpAddr, UdpSocket};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 const CAST_SERVICE_TYPE: &str = "_googlecast._tcp.local.";
 const CAST_NAMESPACE: &str = "urn:x-cast:com.cloudapp.player";
@@ -25,9 +35,38 @@ struct NativeCastSession {
     app: App,
 }
 
-#[derive(Default)]
+#[derive(Clone)]
+struct CastMedia {
+    token: String,
+    mime: String,
+    bytes: Arc<Vec<u8>>,
+}
+
+#[derive(Clone, Default)]
+struct CastMediaStore {
+    current: Arc<RwLock<Option<CastMedia>>>,
+}
+
+struct CastMediaServer {
+    port: u16,
+}
+
 pub struct NativeCastState {
     session: Mutex<Option<NativeCastSession>>,
+    media: CastMediaStore,
+    server: Mutex<Option<CastMediaServer>>,
+    local_ip: Mutex<Option<IpAddr>>,
+}
+
+impl Default for NativeCastState {
+    fn default() -> Self {
+        Self {
+            session: Mutex::new(None),
+            media: CastMediaStore::default(),
+            server: Mutex::new(None),
+            local_ip: Mutex::new(None),
+        }
+    }
 }
 
 fn property(info: &ResolvedService, key: &str) -> String {
@@ -136,8 +175,158 @@ pub async fn connect_cast_device(
             }
         })?;
 
+    // The Cast channel can be available before the custom receiver has
+    // registered its message listener. Give the receiver a brief moment to
+    // finish loading before the frontend sends the initial playback state.
+    tokio::time::sleep(Duration::from_millis(1_400)).await;
+
+    let local_ip = local_address_for(&address)?;
+    *state.local_ip.lock().await = Some(local_ip);
     *active_session = Some(NativeCastSession { receiver, app });
     Ok(())
+}
+
+fn local_address_for(remote_address: &str) -> Result<IpAddr, String> {
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .map_err(|error| format!("No se pudo preparar el audio para Cast: {error}"))?;
+    socket
+        .connect((remote_address, 8009))
+        .map_err(|error| format!("No se pudo determinar la red de Cast: {error}"))?;
+    socket
+        .local_addr()
+        .map(|address| address.ip())
+        .map_err(|error| format!("No se pudo obtener la direccion local: {error}"))
+}
+
+fn parse_range(headers: &HeaderMap, total: usize) -> Option<(usize, usize)> {
+    let value = headers.get(header::RANGE)?.to_str().ok()?;
+    let range = value.strip_prefix("bytes=")?.split(',').next()?;
+    let mut bounds = range.splitn(2, '-');
+    let start = bounds.next()?.parse::<usize>().ok()?;
+    let end = bounds
+        .next()
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or_else(|| total.saturating_sub(1));
+
+    if start >= total || start > end {
+        return None;
+    }
+
+    Some((start, end.min(total.saturating_sub(1))))
+}
+
+async fn serve_cast_audio(
+    AxumState(store): AxumState<CastMediaStore>,
+    Path(token): Path<String>,
+    headers: HeaderMap,
+) -> Response<Body> {
+    let media = store.current.read().await.clone();
+    let Some(media) = media.filter(|media| media.token == token) else {
+        return Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap();
+    };
+
+    let total = media.bytes.len();
+    if total == 0 {
+        return Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .body(Body::empty())
+            .unwrap();
+    }
+
+    let requested_range = parse_range(&headers, total);
+    let (start, end) = requested_range.unwrap_or((0, total - 1));
+    let body = media.bytes[start..=end].to_vec();
+    let mut response = Response::builder()
+        .status(if requested_range.is_some() {
+            StatusCode::PARTIAL_CONTENT
+        } else {
+            StatusCode::OK
+        })
+        .header(header::CONTENT_TYPE, media.mime)
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::CACHE_CONTROL, "no-store")
+        .header(header::CONTENT_LENGTH, body.len().to_string());
+
+    if requested_range.is_some() {
+        response = response.header(
+            header::CONTENT_RANGE,
+            format!("bytes {start}-{end}/{total}"),
+        );
+    }
+
+    response.body(Body::from(body)).unwrap()
+}
+
+async fn ensure_media_server(state: &NativeCastState) -> Result<u16, String> {
+    let mut server = state.server.lock().await;
+    if let Some(server) = server.as_ref() {
+        return Ok(server.port);
+    }
+
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", 0))
+        .await
+        .map_err(|error| format!("No se pudo abrir el servidor de audio Cast: {error}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|error| format!("No se pudo leer el puerto Cast: {error}"))?
+        .port();
+    let app = Router::new()
+        .route("/audio/{token}", get(serve_cast_audio))
+        .with_state(state.media.clone());
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = axum::serve(listener, app).await {
+            log::error!("El servidor de audio Cast se detuvo: {error}");
+        }
+    });
+    *server = Some(CastMediaServer { port });
+    Ok(port)
+}
+
+#[tauri::command]
+pub async fn prepare_cast_audio(
+    state: State<'_, NativeCastState>,
+    request: Request<'_>,
+) -> Result<String, String> {
+    let bytes = match request.body() {
+        InvokeBody::Raw(bytes) => bytes.clone(),
+        _ => return Err("Cloud no recibio el audio en formato binario.".to_string()),
+    };
+    if bytes.is_empty() {
+        return Err("La cancion no contiene audio para transmitir.".to_string());
+    }
+
+    let mime = request
+        .headers()
+        .get("x-cloud-audio-mime")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("audio/mpeg")
+        .to_string();
+    let token = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos()
+        .to_string();
+
+    *state.media.current.write().await = Some(CastMedia {
+        token: token.clone(),
+        mime,
+        bytes: Arc::new(bytes),
+    });
+
+    let port = ensure_media_server(&state).await?;
+    let local_ip = state
+        .local_ip
+        .lock()
+        .await
+        .ok_or_else(|| "Conecta primero un dispositivo Cast.".to_string())?;
+    Ok(format!("http://{local_ip}:{port}/audio/{token}"))
 }
 
 #[tauri::command]
@@ -175,6 +364,8 @@ pub async fn disconnect_cast_device(state: State<'_, NativeCastState>) -> Result
         let _ = session.receiver.stop_app(&session.app).await;
         session.receiver.disconnect().await;
     }
+    *state.media.current.write().await = None;
+    *state.local_ip.lock().await = None;
     Ok(())
 }
 

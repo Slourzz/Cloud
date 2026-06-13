@@ -4,6 +4,7 @@
   var namespace = "urn:x-cast:com.cloudapp.player";
   var state = {
     layout: "cover",
+    lyricMotion: "animated",
     lyricFormat: "line-words",
     interfaceTheme: "crystalized",
     song: null,
@@ -28,19 +29,22 @@
   var nextCover = document.getElementById("next-cover");
   var nextTitle = document.getElementById("next-title");
   var nextArtist = document.getElementById("next-artist");
+  var audio = document.getElementById("cast-audio");
   var lastActiveLine = -1;
+  var layoutTransitionTimer = 0;
+  var pendingStatePayload = null;
   var kawarp = null;
   var kawarpReady = import("/kawarp-core.js")
     .then(function (module) {
       kawarp = new module.default(background, {
-        warpIntensity: 1,
-        blurPasses: 8,
-        animationSpeed: 0.08,
-        saturation: 1.5,
-        dithering: 0.008,
-        transitionDuration: 1000,
-        tintIntensity: 0,
-        scale: 1,
+        warpIntensity: 1.85,
+        blurPasses: 10,
+        animationSpeed: 0.82,
+        saturation: 2.15,
+        dithering: 0.012,
+        transitionDuration: 950,
+        tintIntensity: 0.28,
+        scale: 1.08,
       });
       kawarp.start();
       return kawarp;
@@ -50,6 +54,10 @@
       return null;
     });
   var loadedBackground = "";
+  var coverBuffers = {
+    current: "",
+    next: "",
+  };
 
   function formatTime(seconds) {
     if (!Number.isFinite(seconds)) return "0:00";
@@ -58,6 +66,9 @@
   }
 
   function estimatedProgress() {
+    if (audio && Number.isFinite(audio.currentTime) && audio.readyState > 0) {
+      return audio.currentTime;
+    }
     if (!state.isPlaying) return state.progress;
     return Math.min(
       state.duration || Infinity,
@@ -82,6 +93,7 @@
     if (Math.abs(index - activeIndex) === 1) paragraph.classList.add("is-near");
 
     if (
+      state.lyricMotion !== "static" &&
       index === activeIndex &&
       state.lyricFormat !== "line" &&
       Array.isArray(line.words) &&
@@ -90,7 +102,12 @@
       line.words.forEach(function (word, wordIndex) {
         var span = document.createElement("span");
         span.className = "lyric-word";
+        span.dataset.begin = String(word.begin);
+        span.dataset.end = String(word.end);
         if (currentTime >= word.begin) span.classList.add("is-active");
+        if (currentTime >= word.begin && currentTime < word.end) {
+          span.classList.add("is-current");
+        }
         span.textContent = word.text;
         paragraph.appendChild(span);
         if (wordIndex < line.words.length - 1) {
@@ -112,15 +129,27 @@
 
     var activeIndex = findActiveLine(currentTime);
     if (activeIndex === lastActiveLine && lyrics.childElementCount) {
-      if (state.lyricFormat !== "line") {
+      if (state.lyricMotion !== "static" && state.lyricFormat !== "line") {
         var activeLine = state.lyrics[activeIndex];
         var words = lyrics.querySelectorAll(
           ".lyric-line.is-active .lyric-word",
         );
         words.forEach(function (wordElement, index) {
+          var word = activeLine.words[index];
+          if (!word) return;
+          var wordDuration = Math.max(0.001, word.end - word.begin);
+          var wordProgress = Math.max(
+            0,
+            Math.min(1, (currentTime - word.begin) / wordDuration),
+          );
+          wordElement.classList.toggle("is-active", currentTime >= word.begin);
           wordElement.classList.toggle(
-            "is-active",
-            currentTime >= (activeLine.words[index]?.begin || Infinity),
+            "is-current",
+            currentTime >= word.begin && currentTime < word.end,
+          );
+          wordElement.style.setProperty(
+            "--word-progress",
+            String(wordProgress),
           );
         });
       }
@@ -140,20 +169,23 @@
   }
 
   function renderState() {
+    stage.classList.add("is-transitioning");
     stage.className =
-      "cast-stage layout-" + state.layout + " theme-" + state.interfaceTheme;
+      "cast-stage layout-" +
+      state.layout +
+      " theme-" +
+      state.interfaceTheme +
+      " lyrics-motion-" +
+      state.lyricMotion +
+      " lyrics-format-" +
+      state.lyricFormat +
+      " is-transitioning";
 
     if (state.song) {
       title.textContent = state.song.title || "Cloud";
       artist.textContent = state.song.artist || "Artista desconocido";
-      cover.src = state.song.cover || "";
-      cover.classList.toggle("is-empty", !state.song.cover);
-      if (state.song.cover && state.song.cover !== loadedBackground) {
-        loadedBackground = state.song.cover;
-        kawarpReady.then(function (renderer) {
-          renderer?.loadImage(loadedBackground).catch(function () {});
-        });
-      }
+      applyCurrentCover(state.song.cover || "");
+      syncAudio();
     }
 
     if (state.nextSong) {
@@ -163,6 +195,57 @@
     }
 
     lastActiveLine = -1;
+    window.setTimeout(function () {
+      stage.classList.remove("is-transitioning");
+    }, 40);
+  }
+
+  function applyCurrentCover(source) {
+    cover.src = source || "";
+    cover.classList.toggle("is-empty", !source);
+    if (!source || source === loadedBackground) return;
+    loadedBackground = source;
+    kawarpReady.then(function (renderer) {
+      renderer
+        ?.loadImage(loadedBackground)
+        .then(function () {
+          renderer.resize();
+          renderer.renderFrame();
+          renderer.setOptions({
+            animationSpeed: state.isPlaying ? 0.82 : 0,
+          });
+        })
+        .catch(function () {});
+    });
+  }
+
+  function syncAudio() {
+    if (!audio || !state.song?.audioUrl) return;
+    var sourceChanged = audio.dataset.songId !== String(state.song.id || "");
+    if (sourceChanged) {
+      audio.pause();
+      audio.dataset.songId = String(state.song.id || "");
+      audio.addEventListener(
+        "loadedmetadata",
+        function () {
+          audio.currentTime = Math.min(
+            Number(state.progress) || 0,
+            Number(audio.duration) || Number(state.duration) || 0,
+          );
+          if (state.isPlaying) audio.play().catch(function () {});
+        },
+        { once: true },
+      );
+      audio.src = state.song.audioUrl;
+      audio.load();
+      return;
+    }
+
+    if (Math.abs(audio.currentTime - state.progress) > 1.25) {
+      audio.currentTime = state.progress;
+    }
+    if (state.isPlaying && audio.paused) audio.play().catch(function () {});
+    if (!state.isPlaying && !audio.paused) audio.pause();
   }
 
   document.addEventListener("visibilitychange", function () {
@@ -172,6 +255,10 @@
     } else {
       kawarp.start();
     }
+  });
+  window.addEventListener("resize", function () {
+    kawarp?.resize();
+    kawarp?.renderFrame();
   });
 
   function renderFrame() {
@@ -201,7 +288,28 @@
     }
 
     if (payload.type === "cloud-state") {
-      state = Object.assign({}, state, payload);
+      if (payload.layout && payload.layout !== state.layout) {
+        state = Object.assign({}, state, payload, {
+          updatedAt: performance.now(),
+        });
+        pendingStatePayload = state;
+        stage.classList.add("is-layout-changing");
+        window.clearTimeout(layoutTransitionTimer);
+        layoutTransitionTimer = window.setTimeout(function () {
+          state = pendingStatePayload || state;
+          pendingStatePayload = null;
+          renderState();
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              stage.classList.remove("is-layout-changing");
+            });
+          });
+        }, 180);
+        return;
+      }
+      state = Object.assign({}, state, payload, {
+        updatedAt: performance.now(),
+      });
       renderState();
       return;
     }
@@ -211,17 +319,64 @@
       state.duration = Number(payload.duration) || state.duration;
       state.isPlaying = Boolean(payload.isPlaying);
       state.updatedAt = performance.now();
+      kawarp?.setOptions({ animationSpeed: state.isPlaying ? 0.82 : 0 });
+      syncAudio();
+      return;
+    }
+
+    if (payload.type === "cloud-cover") {
+      var target = payload.target === "next" ? "next" : "current";
+      if (payload.reset) coverBuffers[target] = "";
+      coverBuffers[target] += String(payload.chunk || "");
+      if (!payload.final) return;
+
+      if (
+        target === "current" &&
+        state.song &&
+        String(state.song.id) === String(payload.songId)
+      ) {
+        state.song.cover = coverBuffers.current;
+        applyCurrentCover(coverBuffers.current);
+      }
+      if (
+        target === "next" &&
+        state.nextSong &&
+        String(state.nextSong.id) === String(payload.songId)
+      ) {
+        state.nextSong.cover = coverBuffers.next;
+        nextCover.src = coverBuffers.next;
+      }
+      return;
+    }
+
+    if (payload.type === "cloud-lyrics") {
+      if (!state.song || String(state.song.id) !== String(payload.songId)) {
+        return;
+      }
+      if (payload.reset) state.lyrics = [];
+      if (Array.isArray(payload.lines)) {
+        state.lyrics = state.lyrics.concat(payload.lines);
+      }
+      lastActiveLine = -1;
+      renderLyrics(estimatedProgress());
     }
   }
 
   function enablePreview() {
-    var requestedLayout = new URLSearchParams(window.location.search).get(
-      "layout",
-    );
+    var previewParams = new URLSearchParams(window.location.search);
+    var requestedLayout = previewParams.get("layout");
+    var requestedLyrics = previewParams.get("lyrics");
+    var previewLyricMode = ["static", "line", "letters", "line-words"].includes(
+      requestedLyrics,
+    )
+      ? requestedLyrics
+      : "line-words";
     state = Object.assign({}, state, {
       layout: ["cover", "linear", "split"].includes(requestedLayout)
         ? requestedLayout
         : state.layout,
+      lyricMotion: previewLyricMode === "static" ? "static" : "animated",
+      lyricFormat: previewLyricMode === "static" ? "line" : previewLyricMode,
       song: {
         title: "Lifeline",
         artist: "KawaiiKittyKore",

@@ -515,6 +515,7 @@ pub fn run() {
             get_system_status,
             native_cast::discover_cast_devices,
             native_cast::connect_cast_device,
+            native_cast::prepare_cast_audio,
             native_cast::send_cast_message,
             native_cast::disconnect_cast_device,
             clear_app_cache,

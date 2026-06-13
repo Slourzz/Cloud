@@ -17,6 +17,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 
 export type CastLayout = "cover" | "linear" | "split";
+export type CastLyricMode = "static" | LyricsAnimationFormat;
 export type CastDevice = {
   id: string;
   name: string;
@@ -37,12 +38,12 @@ type CastContextValue = {
   devices: CastDevice[];
   native: boolean;
   layout: CastLayout;
-  lyricFormat: LyricsAnimationFormat;
+  lyricFormat: CastLyricMode;
   discoverDevices: () => Promise<CastDevice[]>;
   connect: (device?: CastDevice) => Promise<void>;
   disconnect: () => Promise<void>;
   setLayout: (layout: CastLayout) => void;
-  setLyricFormat: (format: LyricsAnimationFormat) => void;
+  setLyricFormat: (format: CastLyricMode) => void;
   dismissMessage: () => void;
 };
 
@@ -52,6 +53,7 @@ const CAST_SCRIPT_URL =
 const CAST_LAYOUT_KEY = "cloud.cast.layout";
 const CAST_LYRICS_KEY = "cloud.cast.lyrics-format";
 const CAST_LOAD_TIMEOUT_MS = 8_000;
+const CAST_MESSAGE_CHUNK_SIZE = 12_000;
 const RECEIVER_APPLICATION_ID =
   import.meta.env.VITE_GOOGLE_CAST_APP_ID?.trim() ?? "";
 let castFrameworkPromise: Promise<void> | null = null;
@@ -176,8 +178,56 @@ async function imageToReceiverSource(url?: string) {
   }
 }
 
+type ReceiverLyricLine = {
+  begin: number;
+  end: number;
+  text: string;
+  words?: Array<{
+    begin: number;
+    end: number;
+    text: string;
+  }>;
+};
+
+function splitTextForCast(value: string) {
+  if (!value) return [""];
+  const chunks: string[] = [];
+  for (
+    let offset = 0;
+    offset < value.length;
+    offset += CAST_MESSAGE_CHUNK_SIZE
+  ) {
+    chunks.push(value.slice(offset, offset + CAST_MESSAGE_CHUNK_SIZE));
+  }
+  return chunks;
+}
+
+function groupLyricsForCast(lines: ReceiverLyricLine[]) {
+  const groups: ReceiverLyricLine[][] = [];
+  let current: ReceiverLyricLine[] = [];
+  let currentSize = 0;
+
+  lines.forEach((line) => {
+    const lineSize = JSON.stringify(line).length;
+    if (
+      current.length > 0 &&
+      currentSize + lineSize > CAST_MESSAGE_CHUNK_SIZE
+    ) {
+      groups.push(current);
+      current = [];
+      currentSize = 0;
+    }
+    current.push(line);
+    currentSize += lineSize;
+  });
+
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
 export function GoogleCastProvider({ children }: { children: ReactNode }) {
-  const { currentSong, queue, progress, isPlaying } = useMusicPlayer();
+  const { currentSong, queue, progress, isPlaying, setRemotePlayback } =
+    useMusicPlayer();
   const { getLyrics } = useLyrics();
   const { settings: appearance } = useAppearance();
   const [status, setStatus] = useState<CastStatus>("unavailable");
@@ -187,10 +237,11 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
   const [layout, setLayoutState] = useState<CastLayout>(() =>
     readStoredValue(CAST_LAYOUT_KEY, "cover"),
   );
-  const [lyricFormat, setLyricFormatState] = useState<LyricsAnimationFormat>(
-    () => readStoredValue(CAST_LYRICS_KEY, "line-words"),
+  const [lyricFormat, setLyricFormatState] = useState<CastLyricMode>(() =>
+    readStoredValue(CAST_LYRICS_KEY, "line-words"),
   );
   const coverCacheRef = useRef(new Map<string, string>());
+  const preparedAudioRef = useRef<{ songId: string; url: string } | null>(null);
   const syncSequenceRef = useRef(0);
   const lyricsState = currentSong
     ? getLyrics(currentSong.id)
@@ -214,6 +265,27 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     await session.sendMessage(CAST_NAMESPACE, payload);
     return true;
   }, []);
+
+  const sendInitialState = useCallback(
+    async (payload: unknown) => {
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          const sent = await sendMessage(payload);
+          if (sent) return;
+          lastError = new Error("La sesion Cast aun no esta disponible.");
+        } catch (error) {
+          lastError = error;
+        }
+
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, 450 + attempt * 350),
+        );
+      }
+      throw lastError ?? new Error("La pantalla Cast no recibio la cancion.");
+    },
+    [sendMessage],
+  );
 
   const configureCast = useCallback(async () => {
     if (!RECEIVER_APPLICATION_ID) {
@@ -402,17 +474,24 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
         await getCurrentCastSession()?.endSession?.(true);
       }
     } finally {
+      preparedAudioRef.current = null;
+      setRemotePlayback(false);
       setStatus(RECEIVER_APPLICATION_ID ? "ready" : "unavailable");
       setMessage("");
     }
-  }, [native]);
+  }, [native, setRemotePlayback]);
+
+  useEffect(() => {
+    if (status !== "connected") setRemotePlayback(false);
+    return () => setRemotePlayback(false);
+  }, [status, setRemotePlayback]);
 
   const setLayout = useCallback((nextLayout: CastLayout) => {
     setLayoutState(nextLayout);
     window.localStorage.setItem(CAST_LAYOUT_KEY, nextLayout);
   }, []);
 
-  const setLyricFormat = useCallback((format: LyricsAnimationFormat) => {
+  const setLyricFormat = useCallback((format: CastLyricMode) => {
     setLyricFormatState(format);
     window.localStorage.setItem(CAST_LYRICS_KEY, format);
   }, []);
@@ -424,12 +503,32 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     const sequence = ++syncSequenceRef.current;
 
     const sync = async () => {
+      const prepareAudio = async () => {
+        if (!native || !currentSong.audioUrl) return "";
+        if (preparedAudioRef.current?.songId === currentSong.id) {
+          return preparedAudioRef.current.url;
+        }
+        const response = await fetch(currentSong.audioUrl);
+        if (!response.ok) throw new Error("No se pudo leer el audio local.");
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const audioUrl = await invoke<string>("prepare_cast_audio", bytes, {
+          headers: {
+            "x-cloud-audio-mime":
+              response.headers.get("content-type") || "audio/mpeg",
+          },
+        });
+        preparedAudioRef.current = { songId: currentSong.id, url: audioUrl };
+        return audioUrl;
+      };
+
       const cachedCover = coverCacheRef.current.get(currentSong.id);
-      const cover =
+      const [cover, audioUrl] = await Promise.all([
         cachedCover ??
-        (await imageToReceiverSource(
-          currentSong.customCoverUrl || currentSong.coverUrl,
-        ));
+          imageToReceiverSource(
+            currentSong.customCoverUrl || currentSong.coverUrl,
+          ),
+        prepareAudio(),
+      ]);
       if (sequence !== syncSequenceRef.current) return;
       if (cover) coverCacheRef.current.set(currentSong.id, cover);
 
@@ -447,27 +546,9 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
         coverCacheRef.current.set(nextSong.id, nextCover);
       }
 
-      await sendMessage({
-        type: "cloud-state",
-        layout,
-        lyricFormat,
-        interfaceTheme: appearance.interfaceTheme,
-        song: {
-          id: currentSong.id,
-          title: currentSong.title,
-          artist: currentSong.artist,
-          duration: currentSong.duration,
-          cover,
-        },
-        nextSong: nextSong
-          ? {
-              id: nextSong.id,
-              title: nextSong.title,
-              artist: nextSong.artist,
-              cover: nextCover,
-            }
-          : null,
-        lyrics: lyricsState.lines.slice(0, 500).map((line) => ({
+      const receiverLyrics: ReceiverLyricLine[] = lyricsState.lines
+        .slice(0, 500)
+        .map((line) => ({
           begin: line.begin,
           end: line.end,
           text: line.text,
@@ -476,12 +557,92 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
             end: word.end,
             text: word.text,
           })),
-        })),
+        }));
+
+      await sendInitialState({
+        type: "cloud-state",
+        layout,
+        lyricMotion: lyricFormat === "static" ? "static" : "animated",
+        lyricFormat: lyricFormat === "static" ? "line" : lyricFormat,
+        interfaceTheme: appearance.interfaceTheme,
+        song: {
+          id: currentSong.id,
+          title: currentSong.title,
+          artist: currentSong.artist,
+          duration: currentSong.duration,
+          cover: "",
+          audioUrl,
+        },
+        nextSong: nextSong
+          ? {
+              id: nextSong.id,
+              title: nextSong.title,
+              artist: nextSong.artist,
+              cover: "",
+            }
+          : null,
+        lyrics: [],
+        progress,
+        isPlaying,
       });
+
+      const sendCover = async (
+        target: "current" | "next",
+        songId: string,
+        source: string,
+      ) => {
+        const chunks = splitTextForCast(source);
+        for (let index = 0; index < chunks.length; index += 1) {
+          await sendMessage({
+            type: "cloud-cover",
+            target,
+            songId,
+            reset: index === 0,
+            final: index === chunks.length - 1,
+            chunk: chunks[index],
+          });
+        }
+      };
+
+      await sendCover("current", currentSong.id, cover);
+      if (nextSong) await sendCover("next", nextSong.id, nextCover);
+
+      const lyricGroups = groupLyricsForCast(receiverLyrics);
+      if (lyricGroups.length === 0) {
+        await sendMessage({
+          type: "cloud-lyrics",
+          songId: currentSong.id,
+          reset: true,
+          final: true,
+          lines: [],
+        });
+      } else {
+        for (let index = 0; index < lyricGroups.length; index += 1) {
+          await sendMessage({
+            type: "cloud-lyrics",
+            songId: currentSong.id,
+            reset: index === 0,
+            final: index === lyricGroups.length - 1,
+            lines: lyricGroups[index],
+          });
+        }
+      }
+
+      if (sequence === syncSequenceRef.current) {
+        setRemotePlayback(true);
+        setMessage("Transmitiendo en Google Cast.");
+      }
     };
 
-    sync().catch(() => {
-      setMessage("La pantalla Cast dejo de responder.");
+    sync().catch((error) => {
+      setRemotePlayback(false);
+      const detail =
+        error instanceof Error ? error.message : String(error || "");
+      setMessage(
+        detail
+          ? `Cloud no pudo reproducir el audio en la TV: ${detail}`
+          : "Cloud no pudo reproducir el audio en la TV. El audio continuara en este equipo.",
+      );
     });
   }, [
     status,
@@ -491,12 +652,16 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     currentSong?.duration,
     currentSong?.coverUrl,
     currentSong?.customCoverUrl,
+    currentSong?.audioUrl,
     queue,
     lyricsState.lines,
     layout,
     lyricFormat,
     appearance.interfaceTheme,
+    native,
     sendMessage,
+    sendInitialState,
+    setRemotePlayback,
   ]);
 
   useEffect(() => {

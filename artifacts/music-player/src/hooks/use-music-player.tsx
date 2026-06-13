@@ -51,6 +51,7 @@ interface MusicPlayerState {
   audioQuality: AudioQuality;
   crossfadeSeconds: number;
   isLoadingLibrary: boolean;
+  isRemotePlayback: boolean;
   play: (song?: Song) => void;
   pause: () => void;
   togglePlayPause: () => void;
@@ -78,6 +79,7 @@ interface MusicPlayerState {
   getAudioTime: () => number;
   setCurrentPlaylist: (songs: Song[]) => void;
   setQueue: (queue: Song[]) => void;
+  setRemotePlayback: (active: boolean) => void;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerState | undefined>(
@@ -135,6 +137,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [crossfadeSeconds, setCrossfadeSecondsState] = useState(3);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
   const [currentPlaylist, setCurrentPlaylist] = useState<Song[]>([]);
+  const [isRemotePlayback, setIsRemotePlayback] = useState(false);
 
   const mainAudioRef = useRef<HTMLAudioElement | null>(null);
   const incomingAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -156,6 +159,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const failedSongRef = useRef<string | null>(null);
   const blobUrlsRef = useRef<Map<string, string[]>>(new Map());
   const lastPrevClickRef = useRef(0);
+
+  const setRemotePlayback = useCallback((active: boolean) => {
+    setIsRemotePlayback(active);
+    if (mainAudioRef.current) mainAudioRef.current.muted = active;
+    if (incomingAudioRef.current) incomingAudioRef.current.muted = active;
+  }, []);
 
   // --- Funciones del reproductor ---
   const play = (song?: Song) => {
@@ -388,6 +397,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     mainAudioRef.current = new Audio();
     incomingAudioRef.current = new Audio();
+    mainAudioRef.current.muted = isRemotePlayback;
+    incomingAudioRef.current.muted = isRemotePlayback;
     return () => {
       mainAudioRef.current?.pause();
       incomingAudioRef.current?.pause();
@@ -991,6 +1002,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         audioQuality,
         crossfadeSeconds,
         isLoadingLibrary,
+        isRemotePlayback,
         play,
         pause,
         togglePlayPause,
@@ -1015,6 +1027,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         getAudioTime,
         setCurrentPlaylist,
         setQueue,
+        setRemotePlayback,
       }}
     >
       {children}
