@@ -30,6 +30,8 @@
   var nextTitle = document.getElementById("next-title");
   var nextArtist = document.getElementById("next-artist");
   var audio = document.getElementById("cast-audio");
+  var receiverContext = null;
+  var playerManager = null;
   var lastActiveLine = -1;
   var layoutTransitionTimer = 0;
   var pendingStatePayload = null;
@@ -58,6 +60,7 @@
     current: "",
     next: "",
   };
+  var nativeLyricsReady = false;
 
   function formatTime(seconds) {
     if (!Number.isFinite(seconds)) return "0:00";
@@ -66,6 +69,14 @@
   }
 
   function estimatedProgress() {
+    if (playerManager) {
+      var castTime = Number(
+        typeof playerManager.getCurrentTimeSec === "function"
+          ? playerManager.getCurrentTimeSec()
+          : 0,
+      );
+      if (Number.isFinite(castTime) && castTime >= 0) return castTime;
+    }
     if (audio && Number.isFinite(audio.currentTime) && audio.readyState > 0) {
       return audio.currentTime;
     }
@@ -122,6 +133,7 @@
   }
 
   function renderLyrics(currentTime) {
+    if (nativeLyricsReady) return;
     if (!state.lyrics.length || state.layout === "cover") {
       lyrics.replaceChildren();
       return;
@@ -168,6 +180,26 @@
     lyrics.replaceChildren(fragment);
   }
 
+  function syncNativeLyrics() {
+    var bridge = window.CloudLyricsDisplay;
+    nativeLyricsReady = Boolean(bridge);
+    if (!bridge) return;
+
+    if (!state.lyrics.length || state.layout === "cover") {
+      bridge.clear();
+      return;
+    }
+
+    bridge.render(lyrics, {
+      lines: state.lyrics,
+      songId: state.song ? state.song.id : undefined,
+      isPaused: !state.isPlaying,
+      interfaceTheme: state.interfaceTheme,
+      lyricMotion: state.lyricMotion,
+      lyricFormat: state.lyricFormat,
+    });
+  }
+
   function renderState() {
     stage.classList.add("is-transitioning");
     stage.className =
@@ -195,6 +227,7 @@
     }
 
     lastActiveLine = -1;
+    syncNativeLyrics();
     window.setTimeout(function () {
       stage.classList.remove("is-transitioning");
     }, 40);
@@ -206,8 +239,9 @@
     if (!source || source === loadedBackground) return;
     loadedBackground = source;
     kawarpReady.then(function (renderer) {
+      if (!renderer) return;
       renderer
-        ?.loadImage(loadedBackground)
+        .loadImage(loadedBackground)
         .then(function () {
           renderer.resize();
           renderer.renderFrame();
@@ -220,7 +254,8 @@
   }
 
   function syncAudio() {
-    if (!audio || !state.song?.audioUrl) return;
+    if (!audio || !state.song || !state.song.audioUrl) return;
+    if (playerManager) return;
     var sourceChanged = audio.dataset.songId !== String(state.song.id || "");
     if (sourceChanged) {
       audio.pause();
@@ -248,6 +283,41 @@
     if (!state.isPlaying && !audio.paused) audio.pause();
   }
 
+  function loadCastAudio(payload) {
+    if (!state.song || !state.song.audioUrl) return;
+
+    if (playerManager) {
+      var media = {
+        contentId: state.song.audioUrl,
+        contentUrl: state.song.audioUrl,
+        contentType: payload.audioMime || "audio/mpeg",
+        streamType: "BUFFERED",
+        metadata: {
+          metadataType: 3,
+          title: state.song.title || "Cloud",
+          artist: state.song.artist || "",
+          images: state.song.cover ? [{ url: state.song.cover }] : [],
+        },
+      };
+      if (state.song.id) {
+        media.entity = "cloud:song:" + state.song.id;
+      }
+
+      playerManager
+        .load({
+          media: media,
+          autoplay: Boolean(state.isPlaying),
+          currentTime: Math.max(0, Number(state.progress) || 0),
+        })
+        .catch(function (error) {
+          console.error("Cloud Cast Receiver: no se pudo cargar el audio.", error);
+        });
+      return;
+    }
+
+    syncAudio();
+  }
+
   document.addEventListener("visibilitychange", function () {
     if (!kawarp) return;
     if (document.hidden) {
@@ -257,13 +327,15 @@
     }
   });
   window.addEventListener("resize", function () {
-    kawarp?.resize();
-    kawarp?.renderFrame();
+    if (!kawarp) return;
+    kawarp.resize();
+    kawarp.renderFrame();
   });
 
   function renderFrame() {
     var currentTime = estimatedProgress();
-    var total = state.duration || state.song?.duration || 0;
+    var total =
+      state.duration || (state.song ? Number(state.song.duration) || 0 : 0);
     var percent = total > 0 ? Math.min(100, (currentTime / total) * 100) : 0;
     progress.style.width = percent + "%";
     elapsed.textContent = formatTime(currentTime);
@@ -319,8 +391,23 @@
       state.duration = Number(payload.duration) || state.duration;
       state.isPlaying = Boolean(payload.isPlaying);
       state.updatedAt = performance.now();
-      kawarp?.setOptions({ animationSpeed: state.isPlaying ? 0.82 : 0 });
+      if (kawarp) {
+        kawarp.setOptions({ animationSpeed: state.isPlaying ? 0.82 : 0 });
+      }
       syncAudio();
+      syncNativeLyrics();
+      return;
+    }
+
+    if (payload.type === "cloud-audio") {
+      if (!state.song || String(state.song.id) !== String(payload.songId)) {
+        return;
+      }
+      state.song.audioUrl = String(payload.audioUrl || "");
+      state.progress = Number(payload.progress) || state.progress;
+      state.isPlaying = Boolean(payload.isPlaying);
+      state.updatedAt = performance.now();
+      loadCastAudio(payload);
       return;
     }
 
@@ -358,9 +445,13 @@
         state.lyrics = state.lyrics.concat(payload.lines);
       }
       lastActiveLine = -1;
+      if (payload.final) syncNativeLyrics();
       renderLyrics(estimatedProgress());
     }
   }
+
+  window.__cloudCastPlaybackTime = estimatedProgress;
+  window.addEventListener("cloud-lyrics-display-ready", syncNativeLyrics);
 
   function enablePreview() {
     var previewParams = new URLSearchParams(window.location.search);
@@ -419,8 +510,13 @@
 
   if (previewMode) {
     enablePreview();
-  } else if (window.cast?.framework?.CastReceiverContext) {
-    var receiverContext = cast.framework.CastReceiverContext.getInstance();
+  } else if (
+    window.cast &&
+    window.cast.framework &&
+    window.cast.framework.CastReceiverContext
+  ) {
+    receiverContext = cast.framework.CastReceiverContext.getInstance();
+    playerManager = receiverContext.getPlayerManager();
     receiverContext.addCustomMessageListener(namespace, receiveMessage);
     receiverContext.start({
       disableIdleTimeout: true,

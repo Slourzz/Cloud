@@ -19,13 +19,22 @@ import {
   YOffsetSpline,
 } from "@/vendor/spicy-lyrics/engine";
 
-interface LyricsDisplayProps {
+export interface LyricsDisplayProps {
   lines: LyricLine[];
   currentTime: number;
   source: "ttml" | "plain" | "auto" | null;
   isPaused: boolean;
   coverUrl?: string;
   credits?: LyricsCredits;
+}
+
+export interface LyricsDisplayCoreProps extends LyricsDisplayProps {
+  songId?: string;
+  getPlaybackTime: () => number;
+  seekTo: (time: number) => void;
+  isSimplyUI: boolean;
+  lyricsMotion: "animated" | "static";
+  animationFormat: "line" | "letters" | "line-words";
 }
 
 // ── Spring physics ────────────────────────────────────────────────────────────
@@ -163,6 +172,7 @@ interface LineData {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function LyricsDisplay({
   lines,
+  currentTime,
   source,
   isPaused,
   coverUrl,
@@ -175,6 +185,38 @@ export function LyricsDisplay({
   const animationFormat = isSimplyUI
     ? "line"
     : appearance.lyricsAnimationFormat;
+
+  return (
+    <LyricsDisplayCore
+      lines={lines}
+      currentTime={currentTime}
+      source={source}
+      isPaused={isPaused}
+      coverUrl={coverUrl}
+      credits={credits}
+      songId={currentSong?.id}
+      getPlaybackTime={getAudioTime}
+      seekTo={seek}
+      isSimplyUI={isSimplyUI}
+      lyricsMotion={lyricsMotion}
+      animationFormat={animationFormat}
+    />
+  );
+}
+
+export function LyricsDisplayCore({
+  lines,
+  source,
+  isPaused,
+  coverUrl,
+  credits,
+  songId,
+  getPlaybackTime,
+  seekTo,
+  isSimplyUI,
+  lyricsMotion,
+  animationFormat,
+}: LyricsDisplayCoreProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -195,9 +237,9 @@ export function LyricsDisplay({
   const kawarpRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const creditsRef = useRef(credits);
-  const seekRef = useRef(seek);
+  const seekRef = useRef(seekTo);
   creditsRef.current = credits;
-  seekRef.current = seek;
+  seekRef.current = seekTo;
 
   const hasTiming = source === "ttml" && lines.some((l) => l.begin > 0);
   const creditsKey = [
@@ -426,7 +468,7 @@ export function LyricsDisplay({
     if (container) {
       container.scrollTop = 0;
     }
-  }, [currentSong?.id]);
+  }, [songId]);
 
   // ── Kawarp ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -621,7 +663,7 @@ export function LyricsDisplay({
       const dt = Math.min((now - lastFrameTime.current) / 1000, 0.05);
       lastFrameTime.current = now;
 
-      const t = getAudioTime();
+      const t = getPlaybackTime();
       const arr = linesDataRef.current;
 
       // Find active line
@@ -888,7 +930,7 @@ export function LyricsDisplay({
     return () => cancelAnimationFrame(rafRef.current);
   }, [
     hasTiming,
-    getAudioTime,
+    getPlaybackTime,
     applyBlur,
     scrollToLine,
     lyricsMotion,

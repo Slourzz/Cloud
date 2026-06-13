@@ -74,5 +74,21 @@
         document.head.appendChild(castScript);
       })();
     </script>
+    <script type="module">
+      const isDevelopment =
+        location.hostname === "localhost" ||
+        location.hostname === "127.0.0.1";
+
+      if (isDevelopment) {
+        const { default: RefreshRuntime } = await import("/@react-refresh");
+        RefreshRuntime.injectIntoGlobalHook(window);
+        window.$RefreshReg$ = () => {};
+        window.$RefreshSig$ = () => (type) => type;
+        window.__vite_plugin_react_preamble_installed__ = true;
+        await import("/src/cast-lyrics-bridge.tsx");
+      } else {
+        await import("/cast-lyrics-display.js");
+      }
+    </script>
   </body>
 </html>

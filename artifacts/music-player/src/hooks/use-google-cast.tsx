@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useLyrics } from "@/hooks/use-lyrics";
 import { useMusicPlayer } from "@/hooks/use-music-player";
+import { dbGetSongById } from "@/hooks/use-song-db";
 import {
   useAppearance,
   type LyricsAnimationFormat,
@@ -241,7 +242,11 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     readStoredValue(CAST_LYRICS_KEY, "line-words"),
   );
   const coverCacheRef = useRef(new Map<string, string>());
-  const preparedAudioRef = useRef<{ songId: string; url: string } | null>(null);
+  const preparedAudioRef = useRef<{
+    songId: string;
+    url: string;
+    mime: string;
+  } | null>(null);
   const syncSequenceRef = useRef(0);
   const lyricsState = currentSong
     ? getLyrics(currentSong.id)
@@ -504,31 +509,49 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
 
     const sync = async () => {
       const prepareAudio = async () => {
-        if (!native || !currentSong.audioUrl) return "";
-        if (preparedAudioRef.current?.songId === currentSong.id) {
-          return preparedAudioRef.current.url;
+        if (!native) {
+          return { songId: currentSong.id, url: "", mime: "audio/mpeg" };
         }
-        const response = await fetch(currentSong.audioUrl);
-        if (!response.ok) throw new Error("No se pudo leer el audio local.");
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const audioUrl = await invoke<string>("prepare_cast_audio", bytes, {
+        if (preparedAudioRef.current?.songId === currentSong.id) {
+          return preparedAudioRef.current;
+        }
+
+        const storedSong = await dbGetSongById(currentSong.id);
+        let audioData = storedSong?.audioData;
+        let audioMime = storedSong?.audioMime || "audio/mpeg";
+
+        if (!audioData?.byteLength && currentSong.audioUrl) {
+          const response = await fetch(currentSong.audioUrl);
+          if (!response.ok) {
+            throw new Error("No se pudo leer el audio local.");
+          }
+          audioData = await response.arrayBuffer();
+          audioMime = response.headers.get("content-type") || audioMime;
+        }
+
+        if (!audioData?.byteLength) {
+          throw new Error("No se encontro el audio guardado en la biblioteca.");
+        }
+
+        const audioUrl = await invoke<string>("prepare_cast_audio", audioData, {
           headers: {
-            "x-cloud-audio-mime":
-              response.headers.get("content-type") || "audio/mpeg",
+            "x-cloud-audio-mime": audioMime,
           },
         });
-        preparedAudioRef.current = { songId: currentSong.id, url: audioUrl };
-        return audioUrl;
+        preparedAudioRef.current = {
+          songId: currentSong.id,
+          url: audioUrl,
+          mime: audioMime,
+        };
+        return preparedAudioRef.current;
       };
 
       const cachedCover = coverCacheRef.current.get(currentSong.id);
-      const [cover, audioUrl] = await Promise.all([
+      const cover =
         cachedCover ??
-          imageToReceiverSource(
-            currentSong.customCoverUrl || currentSong.coverUrl,
-          ),
-        prepareAudio(),
-      ]);
+        (await imageToReceiverSource(
+          currentSong.customCoverUrl || currentSong.coverUrl,
+        ));
       if (sequence !== syncSequenceRef.current) return;
       if (cover) coverCacheRef.current.set(currentSong.id, cover);
 
@@ -571,7 +594,7 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
           artist: currentSong.artist,
           duration: currentSong.duration,
           cover: "",
-          audioUrl,
+          audioUrl: "",
         },
         nextSong: nextSong
           ? {
@@ -628,9 +651,30 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (sequence === syncSequenceRef.current) {
+      if (sequence !== syncSequenceRef.current) return;
+
+      try {
+        const preparedAudio = await prepareAudio();
+        if (sequence !== syncSequenceRef.current) return;
+        await sendMessage({
+          type: "cloud-audio",
+          songId: currentSong.id,
+          audioUrl: preparedAudio.url,
+          audioMime: preparedAudio.mime,
+          progress,
+          isPlaying,
+        });
         setRemotePlayback(true);
         setMessage("Transmitiendo en Google Cast.");
+      } catch (error) {
+        setRemotePlayback(false);
+        const detail =
+          error instanceof Error ? error.message : String(error || "");
+        setMessage(
+          detail
+            ? `La TV recibio la cancion, pero Cloud no pudo enviar el audio: ${detail}`
+            : "La TV recibio la cancion, pero el audio continuara en este equipo.",
+        );
       }
     };
 

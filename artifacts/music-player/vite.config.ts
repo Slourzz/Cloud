@@ -57,6 +57,21 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname, "index.html"),
+        "cast-lyrics-display": path.resolve(
+          import.meta.dirname,
+          "src/cast-lyrics-bridge.tsx",
+        ),
+      },
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === "cast-lyrics-display"
+            ? "cast-lyrics-display.js"
+            : "assets/[name]-[hash].js",
+      },
+    },
   },
   server: {
     port,
