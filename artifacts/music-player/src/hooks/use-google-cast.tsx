@@ -14,11 +14,19 @@ import {
   useAppearance,
   type LyricsAnimationFormat,
 } from "@/providers/appearance-provider";
+import { invoke } from "@tauri-apps/api/core";
 
 export type CastLayout = "cover" | "linear" | "split";
+export type CastDevice = {
+  id: string;
+  name: string;
+  model: string;
+  address: string;
+};
 export type CastStatus =
   | "unavailable"
   | "ready"
+  | "discovering"
   | "connecting"
   | "connected"
   | "error";
@@ -26,9 +34,12 @@ export type CastStatus =
 type CastContextValue = {
   status: CastStatus;
   message: string;
+  devices: CastDevice[];
+  native: boolean;
   layout: CastLayout;
   lyricFormat: LyricsAnimationFormat;
-  connect: () => Promise<void>;
+  discoverDevices: () => Promise<CastDevice[]>;
+  connect: (device?: CastDevice) => Promise<void>;
   disconnect: () => Promise<void>;
   setLayout: (layout: CastLayout) => void;
   setLyricFormat: (format: LyricsAnimationFormat) => void;
@@ -52,8 +63,11 @@ function isTauriRuntime() {
 const fallbackContext: CastContextValue = {
   status: "unavailable",
   message: "",
+  devices: [],
+  native: false,
   layout: "cover",
   lyricFormat: "line-words",
+  discoverDevices: async () => [],
   connect: async () => {},
   disconnect: async () => {},
   setLayout: () => {},
@@ -168,6 +182,8 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
   const { settings: appearance } = useAppearance();
   const [status, setStatus] = useState<CastStatus>("unavailable");
   const [message, setMessage] = useState("");
+  const [devices, setDevices] = useState<CastDevice[]>([]);
+  const native = isTauriRuntime();
   const [layout, setLayoutState] = useState<CastLayout>(() =>
     readStoredValue(CAST_LAYOUT_KEY, "cover"),
   );
@@ -189,6 +205,10 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
       };
 
   const sendMessage = useCallback(async (payload: unknown) => {
+    if (isTauriRuntime()) {
+      await invoke("send_cast_message", { payload });
+      return true;
+    }
     const session = getCurrentCastSession();
     if (!session) return false;
     await session.sendMessage(CAST_NAMESPACE, payload);
@@ -229,6 +249,11 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (native) {
+      setStatus(RECEIVER_APPLICATION_ID ? "ready" : "unavailable");
+      return;
+    }
+
     let disposed = false;
     let context: any = null;
     let eventType: string | null = null;
@@ -271,60 +296,116 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
         context.removeEventListener(eventType, onSessionStateChanged);
       }
     };
-  }, [configureCast]);
+  }, [configureCast, native]);
 
-  const connect = useCallback(async () => {
+  const discoverDevices = useCallback(async () => {
+    if (!native) return [];
+    setStatus("discovering");
     setMessage("");
-    if (!RECEIVER_APPLICATION_ID) {
-      setStatus("unavailable");
-      setMessage(
-        "Google Cast aun no esta habilitado en esta compilacion de Cloud.",
-      );
-      return;
-    }
-    if (isTauriRuntime()) {
-      setStatus("unavailable");
-      setMessage(
-        "Google Cast no puede descubrir dispositivos desde WebView2. La TV y el Wi-Fi estan bien; Cloud necesita usar el emisor nativo de Windows.",
-      );
-      return;
-    }
     try {
-      const configured = await configureCast();
-      if (!configured) return;
-      setStatus("connecting");
-      const context = getCastContext();
-      if (!context || typeof context.requestSession !== "function") {
-        throw new Error(
-          "Este motor web no ofrece el selector de dispositivos Google Cast.",
+      const found = await invoke<CastDevice[]>("discover_cast_devices", {
+        timeoutMs: 4_000,
+      });
+      setDevices(found);
+      setStatus("ready");
+      if (found.length === 0) {
+        setMessage(
+          "No se encontraron dispositivos Cast. Confirma que la TV tenga Chromecast integrado y este en la misma red.",
         );
       }
-      await context.requestSession();
-      if (!getCurrentCastSession()) {
-        throw new Error("No se selecciono ningun dispositivo Google Cast.");
-      }
-      setStatus("connected");
-      setMessage("Transmitiendo en Google Cast.");
+      return found;
     } catch (error) {
       const text =
-        error instanceof Error ? error.message : "No se pudo conectar.";
-      if (!text.toLowerCase().includes("cancel")) {
-        setStatus("error");
-        setMessage(text);
-      } else {
-        setStatus("ready");
-      }
+        error instanceof Error
+          ? error.message
+          : String(error || "No se pudo buscar dispositivos Cast.");
+      setStatus("error");
+      setMessage(text);
+      return [];
     }
-  }, [configureCast]);
+  }, [native]);
+
+  const connect = useCallback(
+    async (device?: CastDevice) => {
+      setMessage("");
+      if (!RECEIVER_APPLICATION_ID) {
+        setStatus("unavailable");
+        setMessage(
+          "Google Cast aun no esta habilitado en esta compilacion de Cloud.",
+        );
+        return;
+      }
+      if (native) {
+        let target = device;
+        if (!target) {
+          const found = await discoverDevices();
+          if (found.length === 1) {
+            target = found[0];
+          } else {
+            return;
+          }
+        }
+
+        setStatus("connecting");
+        try {
+          await invoke("connect_cast_device", {
+            address: target.address,
+            appId: RECEIVER_APPLICATION_ID,
+          });
+          setStatus("connected");
+          setMessage(`Transmitiendo en ${target.name}.`);
+        } catch (error) {
+          setStatus("error");
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : String(error || "No se pudo conectar con la TV."),
+          );
+        }
+        return;
+      }
+      try {
+        const configured = await configureCast();
+        if (!configured) return;
+        setStatus("connecting");
+        const context = getCastContext();
+        if (!context || typeof context.requestSession !== "function") {
+          throw new Error(
+            "Este motor web no ofrece el selector de dispositivos Google Cast.",
+          );
+        }
+        await context.requestSession();
+        if (!getCurrentCastSession()) {
+          throw new Error("No se selecciono ningun dispositivo Google Cast.");
+        }
+        setStatus("connected");
+        setMessage("Transmitiendo en Google Cast.");
+      } catch (error) {
+        const text =
+          error instanceof Error ? error.message : "No se pudo conectar.";
+        if (!text.toLowerCase().includes("cancel")) {
+          setStatus("error");
+          setMessage(text);
+        } else {
+          setStatus("ready");
+        }
+      }
+    },
+    [configureCast, discoverDevices, native],
+  );
 
   const disconnect = useCallback(async () => {
     try {
-      await getCurrentCastSession()?.endSession?.(true);
+      if (native) {
+        await invoke("disconnect_cast_device");
+      } else {
+        await getCurrentCastSession()?.endSession?.(true);
+      }
     } finally {
       setStatus(RECEIVER_APPLICATION_ID ? "ready" : "unavailable");
       setMessage("");
     }
-  }, []);
+  }, [native]);
 
   const setLayout = useCallback((nextLayout: CastLayout) => {
     setLayoutState(nextLayout);
@@ -439,8 +520,11 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       message,
+      devices,
+      native,
       layout,
       lyricFormat,
+      discoverDevices,
       connect,
       disconnect,
       setLayout,
@@ -450,8 +534,11 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     [
       status,
       message,
+      devices,
+      native,
       layout,
       lyricFormat,
+      discoverDevices,
       connect,
       disconnect,
       setLayout,

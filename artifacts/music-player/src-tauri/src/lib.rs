@@ -8,6 +8,9 @@ use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 use urlencoding;
 
+mod native_cast;
+use native_cast::NativeCastState;
+
 // ---------- Estructuras para iTunes ----------
 #[derive(Serialize, Deserialize, Clone)]
 struct AlbumInfo {
@@ -496,6 +499,7 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .manage(NativeCastState::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_main_window(app);
         }))
@@ -509,6 +513,10 @@ pub fn run() {
             get_cached_artist_image,
             download_image_to_temp,
             get_system_status,
+            native_cast::discover_cast_devices,
+            native_cast::connect_cast_device,
+            native_cast::send_cast_message,
+            native_cast::disconnect_cast_device,
             clear_app_cache,
             enter_fullscreen // ← NUEVO COMANDO
         ])

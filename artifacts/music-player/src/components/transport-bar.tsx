@@ -14,6 +14,8 @@ import {
   Volume2,
   VolumeX,
   SlidersHorizontal,
+  LoaderCircle,
+  Tv2,
 } from "lucide-react";
 import { useMusicPlayer } from "@/hooks/use-music-player";
 import { cn } from "@/lib/utils";
@@ -21,7 +23,11 @@ import {
   useAppearance,
   type LyricsAnimationFormat,
 } from "@/providers/appearance-provider";
-import { useGoogleCast, type CastLayout } from "@/hooks/use-google-cast";
+import {
+  useGoogleCast,
+  type CastDevice,
+  type CastLayout,
+} from "@/hooks/use-google-cast";
 
 interface TransportBarProps {
   onFullscreen: () => void;
@@ -78,6 +84,7 @@ export function TransportBar({
   const volumeContainerRef = useRef<HTMLDivElement>(null);
   const volumeButtonRef = useRef<HTMLButtonElement>(null);
   const castButtonRef = useRef<HTMLButtonElement>(null);
+  const castOptionsButtonRef = useRef<HTMLButtonElement>(null);
   const castPopoverRef = useRef<HTMLDivElement>(null);
   const progressTrackRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLParagraphElement>(null);
@@ -141,7 +148,8 @@ export function TransportBar({
       if (
         castPopoverOpen &&
         !castPopoverRef.current?.contains(target) &&
-        !castButtonRef.current?.contains(target)
+        !castButtonRef.current?.contains(target) &&
+        !castOptionsButtonRef.current?.contains(target)
       ) {
         setCastPopoverOpen(false);
       }
@@ -239,11 +247,19 @@ export function TransportBar({
   const handleCast = async () => {
     if (cast.message && cast.status !== "connected") {
       cast.dismissMessage();
-      setCastPopoverOpen(false);
     }
     if (cast.status === "connected") {
       await cast.disconnect();
       setCastPopoverOpen(false);
+      return;
+    }
+    if (cast.native) {
+      if (castPopoverOpen) {
+        setCastPopoverOpen(false);
+        return;
+      }
+      setCastPopoverOpen(true);
+      await cast.discoverDevices();
       return;
     }
     await cast.connect();
@@ -457,22 +473,35 @@ export function TransportBar({
             </div>
           </div>
 
-          {castPopoverOpen && cast.status === "connected" ? (
+          {castPopoverOpen ? (
             <div
               ref={castPopoverRef}
               className="pointer-events-auto absolute bottom-[5.75rem] right-5 z-[80]"
             >
-              <CastSettingsPopover
-                isSimplyUI={isSimplyUI}
-                layout={cast.layout}
-                lyricFormat={cast.lyricFormat}
-                onLayoutChange={cast.setLayout}
-                onLyricFormatChange={cast.setLyricFormat}
-              />
+              {cast.status === "connected" ? (
+                <CastSettingsPopover
+                  isSimplyUI={isSimplyUI}
+                  layout={cast.layout}
+                  lyricFormat={cast.lyricFormat}
+                  onLayoutChange={cast.setLayout}
+                  onLyricFormatChange={cast.setLyricFormat}
+                />
+              ) : (
+                <CastDevicePopover
+                  isSimplyUI={isSimplyUI}
+                  devices={cast.devices}
+                  discovering={cast.status === "discovering"}
+                  onRefresh={cast.discoverDevices}
+                  onSelect={async (device) => {
+                    await cast.connect(device);
+                    setCastPopoverOpen(false);
+                  }}
+                />
+              )}
             </div>
           ) : null}
 
-          {cast.message ? (
+          {cast.message && !castPopoverOpen ? (
             <div
               className={cn(
                 "pointer-events-auto absolute bottom-[5.75rem] right-5 z-[79] max-w-72 px-4 py-3 text-center text-xs font-bold text-white",
@@ -590,6 +619,7 @@ export function TransportBar({
 
               <div className="transport-actions relative flex items-center gap-2 justify-self-end">
                 <button
+                  ref={castButtonRef}
                   onClick={handleCast}
                   className="transport-action-button flex h-10 w-10 items-center justify-center rounded-full text-white transition-all hover:scale-105 hover:bg-white/15"
                   style={iconButtonStyle}
@@ -603,7 +633,9 @@ export function TransportBar({
                   <Cast
                     className={cn(
                       "h-5 w-5",
-                      cast.status === "connecting" && "animate-pulse",
+                      (cast.status === "connecting" ||
+                        cast.status === "discovering") &&
+                        "animate-pulse",
                     )}
                     strokeWidth={1.8}
                   />
@@ -611,7 +643,7 @@ export function TransportBar({
                 {cast.status === "connected" ? (
                   <div className="relative">
                     <button
-                      ref={castButtonRef}
+                      ref={castOptionsButtonRef}
                       type="button"
                       onClick={() => {
                         setCastPopoverOpen((open) => !open);
@@ -868,6 +900,83 @@ export function TransportBar({
           }
         }
       `}</style>
+    </div>
+  );
+}
+
+function CastDevicePopover({
+  isSimplyUI,
+  devices,
+  discovering,
+  onRefresh,
+  onSelect,
+}: {
+  isSimplyUI: boolean;
+  devices: CastDevice[];
+  discovering: boolean;
+  onRefresh: () => Promise<CastDevice[]>;
+  onSelect: (device: CastDevice) => Promise<void>;
+}) {
+  return (
+    <div
+      className={cn(
+        "w-72 p-4 text-left text-white",
+        isSimplyUI
+          ? "rounded-lg border border-white/10 bg-[#242424] shadow-xl"
+          : "rounded-2xl border border-white/18 bg-black/30 shadow-2xl backdrop-blur-2xl",
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black">Transmitir en</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-white/48">
+            Dispositivos disponibles
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void onRefresh()}
+          disabled={discovering}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-white/72 transition hover:bg-white/12 hover:text-white disabled:opacity-50"
+          aria-label="Buscar dispositivos de nuevo"
+        >
+          <LoaderCircle
+            className={cn("h-4 w-4", discovering && "animate-spin")}
+          />
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-1">
+        {discovering && devices.length === 0 ? (
+          <div className="flex min-h-20 items-center justify-center gap-2 text-xs font-bold text-white/56">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Buscando televisores...
+          </div>
+        ) : devices.length > 0 ? (
+          devices.map((device) => (
+            <button
+              key={device.id}
+              type="button"
+              onClick={() => void onSelect(device)}
+              className="flex min-h-14 items-center gap-3 rounded-xl px-3 text-left transition hover:bg-white/12"
+            >
+              <Tv2 className="h-5 w-5 shrink-0 text-white/76" />
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-black">
+                  {device.name}
+                </span>
+                <span className="block truncate text-[10px] font-semibold text-white/46">
+                  {device.model || "Google Cast"}
+                </span>
+              </span>
+            </button>
+          ))
+        ) : (
+          <p className="py-5 text-center text-xs font-semibold text-white/50">
+            No encontramos dispositivos Cast.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
