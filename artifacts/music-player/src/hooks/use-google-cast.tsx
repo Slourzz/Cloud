@@ -247,6 +247,7 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     url: string;
     mime: string;
   } | null>(null);
+  const loadedCastSongRef = useRef<string | null>(null);
   const syncSequenceRef = useRef(0);
   const lyricsState = currentSong
     ? getLyrics(currentSong.id)
@@ -506,6 +507,7 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status !== "connected" || !currentSong) return;
     const sequence = ++syncSequenceRef.current;
+    loadedCastSongRef.current = null;
 
     const sync = async () => {
       const prepareAudio = async () => {
@@ -666,14 +668,29 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
       try {
         const preparedAudio = await prepareAudio();
         if (sequence !== syncSequenceRef.current) return;
-        await sendMessage({
-          type: "cloud-audio",
-          songId: currentSong.id,
-          audioUrl: preparedAudio.url,
-          audioMime: preparedAudio.mime,
-          progress,
-          isPlaying,
-        });
+        if (native) {
+          await invoke("load_cast_audio", {
+            request: {
+              audioUrl: preparedAudio.url,
+              mime: preparedAudio.mime,
+              title: currentSong.title,
+              artist: currentSong.artist,
+              duration: currentSong.duration,
+              progress,
+              autoplay: isPlaying,
+            },
+          });
+        } else {
+          await sendMessage({
+            type: "cloud-audio",
+            songId: currentSong.id,
+            audioUrl: preparedAudio.url,
+            audioMime: preparedAudio.mime,
+            progress,
+            isPlaying,
+          });
+        }
+        loadedCastSongRef.current = currentSong.id;
         setRemotePlayback(true);
         setMessage("Transmitiendo en Google Cast.");
       } catch (error) {
@@ -734,6 +751,12 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     currentSong?.duration,
     sendMessage,
   ]);
+
+  useEffect(() => {
+    if (!native || status !== "connected" || !currentSong) return;
+    if (loadedCastSongRef.current !== currentSong.id) return;
+    invoke("set_cast_playback", { playing: isPlaying }).catch(() => {});
+  }, [native, status, currentSong?.id, isPlaying]);
 
   const value = useMemo<CastContextValue>(
     () => ({

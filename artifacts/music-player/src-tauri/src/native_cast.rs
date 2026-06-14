@@ -5,10 +5,13 @@ use axum::{
     routing::get,
     Router,
 };
+use cast_sender::namespace::media::{
+    LoadRequestData, MediaInformationBuilder, MusicTrackMediaMetadataBuilder, StreamType,
+};
 use cast_sender::namespace::{Custom, NamespaceUrn};
-use cast_sender::{App, AppId, Receiver};
+use cast_sender::{App, AppId, MediaController, Receiver};
 use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::net::{IpAddr, UdpSocket};
@@ -33,6 +36,7 @@ pub struct CastDevice {
 struct NativeCastSession {
     receiver: Receiver,
     app: App,
+    media_controller: MediaController,
 }
 
 #[derive(Clone)]
@@ -56,6 +60,18 @@ pub struct NativeCastState {
     media: CastMediaStore,
     server: Mutex<Option<CastMediaServer>>,
     local_ip: Mutex<Option<IpAddr>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CastAudioRequest {
+    audio_url: String,
+    mime: String,
+    title: String,
+    artist: String,
+    duration: f64,
+    progress: f64,
+    autoplay: bool,
 }
 
 impl Default for NativeCastState {
@@ -174,6 +190,8 @@ pub async fn connect_cast_device(
                 format!("No se pudo abrir Cloud en la TV: {detail}")
             }
         })?;
+    let media_controller = MediaController::new(app.clone(), receiver.clone())
+        .map_err(|error| format!("El receptor Cast no admite audio: {error}"))?;
 
     // The Cast channel can be available before the custom receiver has
     // registered its message listener. Give the receiver a brief moment to
@@ -182,7 +200,11 @@ pub async fn connect_cast_device(
 
     let local_ip = local_address_for(&address)?;
     *state.local_ip.lock().await = Some(local_ip);
-    *active_session = Some(NativeCastSession { receiver, app });
+    *active_session = Some(NativeCastSession {
+        receiver,
+        app,
+        media_controller,
+    });
     Ok(())
 }
 
@@ -339,6 +361,61 @@ pub async fn prepare_cast_audio(
         .await
         .ok_or_else(|| "Conecta primero un dispositivo Cast.".to_string())?;
     Ok(format!("http://{local_ip}:{port}/audio/{token}"))
+}
+
+#[tauri::command]
+pub async fn load_cast_audio(
+    state: State<'_, NativeCastState>,
+    request: CastAudioRequest,
+) -> Result<(), String> {
+    let active_session = state.session.lock().await;
+    let session = active_session
+        .as_ref()
+        .ok_or_else(|| "No hay una sesion Cast activa.".to_string())?;
+
+    let metadata = MusicTrackMediaMetadataBuilder::default()
+        .title(request.title)
+        .artist(request.artist)
+        .build()
+        .map_err(|error| format!("No se pudieron preparar los metadatos Cast: {error}"))?;
+    let media = MediaInformationBuilder::default()
+        .content_id(request.audio_url)
+        .content_type(request.mime)
+        .stream_type(StreamType::Buffered)
+        .duration(request.duration.max(0.0))
+        .metadata(metadata)
+        .build()
+        .map_err(|error| format!("No se pudo preparar la cancion para Cast: {error}"))?;
+    let load_request = LoadRequestData {
+        autoplay: Some(request.autoplay),
+        current_time: Some(request.progress.max(0.0)),
+        media,
+        ..Default::default()
+    };
+
+    session
+        .media_controller
+        .load(load_request)
+        .await
+        .map_err(|error| format!("La TV no pudo cargar el audio: {error}"))
+}
+
+#[tauri::command]
+pub async fn set_cast_playback(
+    state: State<'_, NativeCastState>,
+    playing: bool,
+) -> Result<(), String> {
+    let active_session = state.session.lock().await;
+    let session = active_session
+        .as_ref()
+        .ok_or_else(|| "No hay una sesion Cast activa.".to_string())?;
+
+    let result = if playing {
+        session.media_controller.start().await
+    } else {
+        session.media_controller.pause().await
+    };
+    result.map_err(|error| format!("La TV no pudo cambiar la reproduccion: {error}"))
 }
 
 #[tauri::command]
