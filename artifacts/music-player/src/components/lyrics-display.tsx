@@ -35,6 +35,7 @@ export interface LyricsDisplayCoreProps extends LyricsDisplayProps {
   isSimplyUI: boolean;
   lyricsMotion: "animated" | "static";
   animationFormat: "line" | "letters" | "line-words";
+  active?: boolean;
 }
 
 // ── Spring physics ────────────────────────────────────────────────────────────
@@ -216,6 +217,7 @@ export function LyricsDisplayCore({
   isSimplyUI,
   lyricsMotion,
   animationFormat,
+  active = true,
 }: LyricsDisplayCoreProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -656,7 +658,13 @@ export function LyricsDisplayCore({
 
   // ── RAF loop ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!hasTiming) return;
+    if (!hasTiming || !active) return;
+
+    lastFrameTime.current = performance.now();
+    lastActiveIndex.current = -1;
+    currentActiveIndexRef.current = -1;
+    lastPreservedIndexRef.current = -1;
+    autoScrollBlockedUntilRef.current = 0;
 
     const tick = () => {
       const now = performance.now();
@@ -935,6 +943,7 @@ export function LyricsDisplayCore({
     scrollToLine,
     lyricsMotion,
     animationFormat,
+    active,
   ]);
 
   // ── Plain text ──────────────────────────────────────────────────────────────

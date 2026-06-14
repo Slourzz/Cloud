@@ -249,6 +249,8 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const loadedCastSongRef = useRef<string | null>(null);
   const syncSequenceRef = useRef(0);
+  const lyricsSequenceRef = useRef(0);
+  const nextSongSequenceRef = useRef(0);
   const lyricsState = currentSong
     ? getLyrics(currentSong.id)
     : {
@@ -510,6 +512,7 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     loadedCastSongRef.current = null;
 
     const sync = async () => {
+      const nextSong = queue[0];
       const prepareAudio = async () => {
         if (!native) {
           return { songId: currentSong.id, url: "", mime: "audio/mpeg" };
@@ -558,42 +561,6 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
         return preparedAudioRef.current;
       };
 
-      const cachedCover = coverCacheRef.current.get(currentSong.id);
-      const cover =
-        cachedCover ??
-        (await imageToReceiverSource(
-          currentSong.customCoverUrl || currentSong.coverUrl,
-        ));
-      if (sequence !== syncSequenceRef.current) return;
-      if (cover) coverCacheRef.current.set(currentSong.id, cover);
-
-      const nextSong = queue[0];
-      const cachedNextCover = nextSong
-        ? coverCacheRef.current.get(nextSong.id)
-        : "";
-      const nextCover =
-        cachedNextCover ??
-        (await imageToReceiverSource(
-          nextSong?.customCoverUrl || nextSong?.coverUrl,
-        ));
-      if (sequence !== syncSequenceRef.current) return;
-      if (nextSong && nextCover) {
-        coverCacheRef.current.set(nextSong.id, nextCover);
-      }
-
-      const receiverLyrics: ReceiverLyricLine[] = lyricsState.lines
-        .slice(0, 500)
-        .map((line) => ({
-          begin: line.begin,
-          end: line.end,
-          text: line.text,
-          words: line.words?.map((word) => ({
-            begin: word.begin,
-            end: word.end,
-            text: word.text,
-          })),
-        }));
-
       await sendInitialState({
         type: "cloud-state",
         layout,
@@ -621,52 +588,10 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
         isPlaying,
       });
 
-      const sendCover = async (
-        target: "current" | "next",
-        songId: string,
-        source: string,
-      ) => {
-        const chunks = splitTextForCast(source);
-        for (let index = 0; index < chunks.length; index += 1) {
-          await sendMessage({
-            type: "cloud-cover",
-            target,
-            songId,
-            reset: index === 0,
-            final: index === chunks.length - 1,
-            chunk: chunks[index],
-          });
-        }
-      };
-
-      await sendCover("current", currentSong.id, cover);
-      if (nextSong) await sendCover("next", nextSong.id, nextCover);
-
-      const lyricGroups = groupLyricsForCast(receiverLyrics);
-      if (lyricGroups.length === 0) {
-        await sendMessage({
-          type: "cloud-lyrics",
-          songId: currentSong.id,
-          reset: true,
-          final: true,
-          lines: [],
-        });
-      } else {
-        for (let index = 0; index < lyricGroups.length; index += 1) {
-          await sendMessage({
-            type: "cloud-lyrics",
-            songId: currentSong.id,
-            reset: index === 0,
-            final: index === lyricGroups.length - 1,
-            lines: lyricGroups[index],
-          });
-        }
-      }
-
-      if (sequence !== syncSequenceRef.current) return;
+      const preparedAudioPromise = prepareAudio();
 
       try {
-        const preparedAudio = await prepareAudio();
+        const preparedAudio = await preparedAudioPromise;
         if (sequence !== syncSequenceRef.current) return;
         if (native) {
           await invoke("load_cast_audio", {
@@ -703,6 +628,36 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
             : "La TV recibio la cancion, pero el audio continuara en este equipo.",
         );
       }
+
+      if (sequence !== syncSequenceRef.current) return;
+      const cachedCover = coverCacheRef.current.get(currentSong.id);
+      const cover =
+        cachedCover ??
+        (await imageToReceiverSource(
+          currentSong.customCoverUrl || currentSong.coverUrl,
+        ));
+      if (sequence !== syncSequenceRef.current) return;
+      if (cover) coverCacheRef.current.set(currentSong.id, cover);
+
+      const sendCover = async (
+        target: "current" | "next",
+        songId: string,
+        source: string,
+      ) => {
+        const chunks = splitTextForCast(source);
+        for (let index = 0; index < chunks.length; index += 1) {
+          await sendMessage({
+            type: "cloud-cover",
+            target,
+            songId,
+            reset: index === 0,
+            final: index === chunks.length - 1,
+            chunk: chunks[index],
+          });
+        }
+      };
+
+      await sendCover("current", currentSong.id, cover);
     };
 
     sync().catch((error) => {
@@ -724,16 +679,119 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
     currentSong?.coverUrl,
     currentSong?.customCoverUrl,
     currentSong?.audioUrl,
-    queue,
-    lyricsState.lines,
-    layout,
-    lyricFormat,
-    appearance.interfaceTheme,
     native,
     sendMessage,
     sendInitialState,
     setRemotePlayback,
   ]);
+
+  useEffect(() => {
+    if (status !== "connected") return;
+    sendMessage({
+      type: "cloud-presentation",
+      layout,
+      lyricMotion: lyricFormat === "static" ? "static" : "animated",
+      lyricFormat: lyricFormat === "static" ? "line" : lyricFormat,
+      interfaceTheme: appearance.interfaceTheme,
+    }).catch(() => {});
+  }, [status, layout, lyricFormat, appearance.interfaceTheme, sendMessage]);
+
+  useEffect(() => {
+    if (status !== "connected" || !currentSong || lyricsState.isLoading) return;
+    const sequence = ++lyricsSequenceRef.current;
+    const receiverLyrics: ReceiverLyricLine[] = lyricsState.lines
+      .slice(0, 500)
+      .map((line) => ({
+        begin: line.begin,
+        end: line.end,
+        text: line.text,
+        words: line.words?.map((word) => ({
+          begin: word.begin,
+          end: word.end,
+          text: word.text,
+        })),
+      }));
+    const groups = groupLyricsForCast(receiverLyrics);
+
+    const syncLyrics = async () => {
+      if (groups.length === 0) {
+        await sendMessage({
+          type: "cloud-lyrics",
+          songId: currentSong.id,
+          reset: true,
+          final: true,
+          lines: [],
+          credits: lyricsState.credits,
+        });
+        return;
+      }
+
+      for (let index = 0; index < groups.length; index += 1) {
+        if (sequence !== lyricsSequenceRef.current) return;
+        await sendMessage({
+          type: "cloud-lyrics",
+          songId: currentSong.id,
+          reset: index === 0,
+          final: index === groups.length - 1,
+          lines: groups[index],
+          credits: index === 0 ? lyricsState.credits : undefined,
+        });
+      }
+    };
+
+    syncLyrics().catch(() => {});
+  }, [
+    status,
+    currentSong?.id,
+    lyricsState.lines,
+    lyricsState.isLoading,
+    lyricsState.credits,
+    sendMessage,
+  ]);
+
+  useEffect(() => {
+    if (status !== "connected") return;
+    const sequence = ++nextSongSequenceRef.current;
+    const nextSong = queue[0] ?? null;
+
+    const syncNextSong = async () => {
+      await sendMessage({
+        type: "cloud-next",
+        nextSong: nextSong
+          ? {
+              id: nextSong.id,
+              title: nextSong.title,
+              artist: nextSong.artist,
+              cover: "",
+            }
+          : null,
+      });
+      if (!nextSong) return;
+
+      const cachedCover = coverCacheRef.current.get(nextSong.id);
+      const nextCover =
+        cachedCover ??
+        (await imageToReceiverSource(
+          nextSong.customCoverUrl || nextSong.coverUrl,
+        ));
+      if (sequence !== nextSongSequenceRef.current) return;
+      if (nextCover) coverCacheRef.current.set(nextSong.id, nextCover);
+      const chunks = splitTextForCast(nextCover);
+      for (let index = 0; index < chunks.length; index += 1) {
+        if (sequence !== nextSongSequenceRef.current) return;
+        await sendMessage({
+          type: "cloud-cover",
+          target: "next",
+          songId: nextSong.id,
+          reset: index === 0,
+          final: index === chunks.length - 1,
+          chunk: chunks[index],
+        });
+      }
+    };
+
+    syncNextSong().catch(() => {});
+  }, [status, queue, sendMessage]);
 
   useEffect(() => {
     if (status !== "connected" || !currentSong) return;

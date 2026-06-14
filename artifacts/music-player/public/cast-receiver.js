@@ -4,12 +4,15 @@
   var namespace = "urn:x-cast:com.cloudapp.player";
   var state = {
     layout: "cover",
+    requestedLayout: "cover",
     lyricMotion: "animated",
     lyricFormat: "line-words",
     interfaceTheme: "crystalized",
     song: null,
     nextSong: null,
     lyrics: [],
+    lyricsRevision: 0,
+    credits: null,
     progress: 0,
     duration: 0,
     isPlaying: false,
@@ -34,7 +37,6 @@
   var playerManager = null;
   var lastActiveLine = -1;
   var layoutTransitionTimer = 0;
-  var pendingStatePayload = null;
   var kawarp = null;
   var kawarpReady = import("/kawarp-core.js")
     .then(function (module) {
@@ -61,6 +63,8 @@
     next: "",
   };
   var nativeLyricsReady = false;
+  var lastLyricsPaused = null;
+  var layouts = ["cover", "linear", "split"];
 
   function formatTime(seconds) {
     if (!Number.isFinite(seconds)) return "0:00";
@@ -185,7 +189,7 @@
     nativeLyricsReady = Boolean(bridge);
     if (!bridge) return;
 
-    if (!state.lyrics.length || state.layout === "cover") {
+    if (!state.lyrics.length) {
       bridge.clear();
       return;
     }
@@ -193,11 +197,40 @@
     bridge.render(lyrics, {
       lines: state.lyrics,
       songId: state.song ? state.song.id : undefined,
+      revision: state.lyricsRevision,
       isPaused: !state.isPlaying,
       interfaceTheme: state.interfaceTheme,
       lyricMotion: state.lyricMotion,
       lyricFormat: state.lyricFormat,
+      credits: state.credits || undefined,
     });
+    lastLyricsPaused = !state.isPlaying;
+  }
+
+  function effectiveLayout() {
+    return state.lyrics.length ? state.requestedLayout : "cover";
+  }
+
+  function applyPresentation(animate) {
+    var nextLayout = effectiveLayout();
+    var changed = nextLayout !== state.layout;
+    state.layout = nextLayout;
+
+    if (animate && changed) {
+      stage.classList.add("is-layout-changing");
+      window.clearTimeout(layoutTransitionTimer);
+      layoutTransitionTimer = window.setTimeout(function () {
+        renderState();
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            stage.classList.remove("is-layout-changing");
+          });
+        });
+      }, 120);
+      return;
+    }
+
+    renderState();
   }
 
   function renderState() {
@@ -310,7 +343,10 @@
           currentTime: Math.max(0, Number(state.progress) || 0),
         })
         .catch(function (error) {
-          console.error("Cloud Cast Receiver: no se pudo cargar el audio.", error);
+          console.error(
+            "Cloud Cast Receiver: no se pudo cargar el audio.",
+            error,
+          );
         });
       return;
     }
@@ -360,42 +396,57 @@
     }
 
     if (payload.type === "cloud-state") {
-      if (payload.layout && payload.layout !== state.layout) {
-        state = Object.assign({}, state, payload, {
-          updatedAt: performance.now(),
-        });
-        pendingStatePayload = state;
-        stage.classList.add("is-layout-changing");
-        window.clearTimeout(layoutTransitionTimer);
-        layoutTransitionTimer = window.setTimeout(function () {
-          state = pendingStatePayload || state;
-          pendingStatePayload = null;
-          renderState();
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              stage.classList.remove("is-layout-changing");
-            });
-          });
-        }, 180);
-        return;
-      }
+      var previousSongId = state.song && state.song.id;
+      var incomingSongId = payload.song && payload.song.id;
+      var songChanged =
+        incomingSongId &&
+        String(incomingSongId) !== String(previousSongId || "");
       state = Object.assign({}, state, payload, {
+        requestedLayout: payload.layout || state.requestedLayout,
         updatedAt: performance.now(),
       });
-      renderState();
+      if (songChanged) {
+        state.lyrics = [];
+        state.credits = null;
+        state.lyricsRevision += 1;
+      }
+      applyPresentation(true);
+      return;
+    }
+
+    if (payload.type === "cloud-presentation") {
+      state.requestedLayout = payload.layout || state.requestedLayout;
+      state.lyricMotion = payload.lyricMotion || state.lyricMotion;
+      state.lyricFormat = payload.lyricFormat || state.lyricFormat;
+      state.interfaceTheme = payload.interfaceTheme || state.interfaceTheme;
+      applyPresentation(true);
+      syncNativeLyrics();
+      return;
+    }
+
+    if (payload.type === "cloud-next") {
+      state.nextSong = payload.nextSong || null;
+      if (!state.nextSong) {
+        nextSong.hidden = true;
+      } else {
+        nextTitle.textContent = state.nextSong.title || "";
+        nextArtist.textContent = state.nextSong.artist || "";
+      }
       return;
     }
 
     if (payload.type === "cloud-progress") {
       state.progress = Number(payload.progress) || 0;
       state.duration = Number(payload.duration) || state.duration;
-      state.isPlaying = Boolean(payload.isPlaying);
+      if (!playerManager) {
+        state.isPlaying = Boolean(payload.isPlaying);
+      }
       state.updatedAt = performance.now();
       if (kawarp) {
         kawarp.setOptions({ animationSpeed: state.isPlaying ? 0.82 : 0 });
       }
       syncAudio();
-      syncNativeLyrics();
+      if (lastLyricsPaused !== !state.isPlaying) syncNativeLyrics();
       return;
     }
 
@@ -441,11 +492,16 @@
         return;
       }
       if (payload.reset) state.lyrics = [];
+      if (payload.reset) state.credits = payload.credits || null;
       if (Array.isArray(payload.lines)) {
         state.lyrics = state.lyrics.concat(payload.lines);
       }
       lastActiveLine = -1;
-      if (payload.final) syncNativeLyrics();
+      if (payload.final) {
+        state.lyricsRevision += 1;
+        applyPresentation(true);
+        syncNativeLyrics();
+      }
       renderLyrics(estimatedProgress());
     }
   }
@@ -453,10 +509,97 @@
   window.__cloudCastPlaybackTime = estimatedProgress;
   window.addEventListener("cloud-lyrics-display-ready", syncNativeLyrics);
 
+  function cycleLayout(direction) {
+    var currentIndex = layouts.indexOf(state.requestedLayout);
+    if (currentIndex < 0) currentIndex = 0;
+    var nextIndex =
+      (currentIndex + direction + layouts.length) % layouts.length;
+    state.requestedLayout = layouts[nextIndex];
+    applyPresentation(true);
+  }
+
+  function seekRemote(seconds) {
+    var target = Math.max(
+      0,
+      Math.min(state.duration || Infinity, estimatedProgress() + seconds),
+    );
+    if (playerManager && typeof playerManager.seek === "function") {
+      playerManager.seek(target);
+    } else if (audio) {
+      audio.currentTime = target;
+    }
+    state.progress = target;
+    state.updatedAt = performance.now();
+  }
+
+  function toggleRemotePlayback() {
+    if (playerManager) {
+      var playerState =
+        typeof playerManager.getPlayerState === "function"
+          ? String(playerManager.getPlayerState() || "")
+          : "";
+      var isActuallyPlaying =
+        playerState === "PLAYING" || playerState === "BUFFERING";
+      if (isActuallyPlaying && typeof playerManager.pause === "function") {
+        playerManager.pause();
+      } else if (typeof playerManager.play === "function") {
+        playerManager.play();
+      }
+    } else if (audio) {
+      if (audio.paused) audio.play().catch(function () {});
+      else audio.pause();
+      setReceiverPlaying(!audio.paused);
+    }
+  }
+
+  function setReceiverPlaying(isPlaying) {
+    var nextPlaying = Boolean(isPlaying);
+    if (state.isPlaying === nextPlaying && lastLyricsPaused === !nextPlaying) {
+      return;
+    }
+    state.isPlaying = nextPlaying;
+    state.updatedAt = performance.now();
+    if (kawarp) {
+      kawarp.setOptions({ animationSpeed: nextPlaying ? 0.82 : 0 });
+    }
+    syncNativeLyrics();
+  }
+
+  window.addEventListener("keydown", function (event) {
+    if (event.repeat) return;
+    var key = event.key || "";
+    var code = Number(event.keyCode) || 0;
+    if (key === "Enter" || key === "MediaPlayPause" || code === 13) {
+      event.preventDefault();
+      toggleRemotePlayback();
+      return;
+    }
+    if (key === "ArrowLeft" || code === 37) {
+      event.preventDefault();
+      seekRemote(-10);
+      return;
+    }
+    if (key === "ArrowRight" || code === 39) {
+      event.preventDefault();
+      seekRemote(10);
+      return;
+    }
+    if (key === "ArrowUp" || code === 38) {
+      event.preventDefault();
+      cycleLayout(1);
+      return;
+    }
+    if (key === "ArrowDown" || code === 40) {
+      event.preventDefault();
+      cycleLayout(-1);
+    }
+  });
+
   function enablePreview() {
     var previewParams = new URLSearchParams(window.location.search);
     var requestedLayout = previewParams.get("layout");
     var requestedLyrics = previewParams.get("lyrics");
+    var previewWithoutLyrics = requestedLyrics === "none";
     var previewLyricMode = ["static", "line", "letters", "line-words"].includes(
       requestedLyrics,
     )
@@ -466,6 +609,9 @@
       layout: ["cover", "linear", "split"].includes(requestedLayout)
         ? requestedLayout
         : state.layout,
+      requestedLayout: ["cover", "linear", "split"].includes(requestedLayout)
+        ? requestedLayout
+        : state.requestedLayout,
       lyricMotion: previewLyricMode === "static" ? "static" : "animated",
       lyricFormat: previewLyricMode === "static" ? "line" : previewLyricMode,
       song: {
@@ -483,27 +629,29 @@
       duration: 199,
       isPlaying: true,
       updatedAt: performance.now(),
-      lyrics: [
-        {
-          begin: 178,
-          end: 184,
-          text: "Looking for another lifeline",
-          words: [
-            { begin: 178, end: 179, text: "Looking" },
-            { begin: 179, end: 180, text: "for" },
-            { begin: 180, end: 181, text: "another" },
-            { begin: 181, end: 184, text: "lifeline" },
+      lyrics: previewWithoutLyrics
+        ? []
+        : [
+            {
+              begin: 178,
+              end: 184,
+              text: "Looking for another lifeline",
+              words: [
+                { begin: 178, end: 179, text: "Looking" },
+                { begin: 179, end: 180, text: "for" },
+                { begin: 180, end: 181, text: "another" },
+                { begin: 181, end: 184, text: "lifeline" },
+              ],
+            },
+            {
+              begin: 184,
+              end: 190,
+              text: "Somewhere beyond the skyline",
+              words: [],
+            },
           ],
-        },
-        {
-          begin: 184,
-          end: 190,
-          text: "Somewhere beyond the skyline",
-          words: [],
-        },
-      ],
     });
-    renderState();
+    applyPresentation(false);
   }
 
   var previewMode = new URLSearchParams(window.location.search).has("preview");
@@ -517,6 +665,25 @@
   ) {
     receiverContext = cast.framework.CastReceiverContext.getInstance();
     playerManager = receiverContext.getPlayerManager();
+    var receiverEvents = cast.framework.events.EventType;
+    [receiverEvents.PLAY, receiverEvents.PLAYING]
+      .filter(Boolean)
+      .forEach(function (eventType) {
+        playerManager.addEventListener(eventType, function () {
+          setReceiverPlaying(true);
+        });
+      });
+    [
+      receiverEvents.PAUSE,
+      receiverEvents.ENDED,
+      receiverEvents.MEDIA_FINISHED,
+    ]
+      .filter(Boolean)
+      .forEach(function (eventType) {
+        playerManager.addEventListener(eventType, function () {
+          setReceiverPlaying(false);
+        });
+      });
     receiverContext.addCustomMessageListener(namespace, receiveMessage);
     receiverContext.start({
       disableIdleTimeout: true,
