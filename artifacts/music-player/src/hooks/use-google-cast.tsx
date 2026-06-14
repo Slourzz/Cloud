@@ -533,11 +533,21 @@ export function GoogleCastProvider({ children }: { children: ReactNode }) {
           throw new Error("No se encontro el audio guardado en la biblioteca.");
         }
 
-        const audioUrl = await invoke<string>("prepare_cast_audio", audioData, {
-          headers: {
-            "x-cloud-audio-mime": audioMime,
+        // Keep the payload in the current WebView realm so Tauri recognizes it
+        // as an octet-stream body instead of serializing it as JSON.
+        const sourceBytes = new Uint8Array(audioData);
+        const audioBytes = new Uint8Array(sourceBytes.byteLength);
+        audioBytes.set(sourceBytes);
+
+        const audioUrl = await invoke<string>(
+          "prepare_cast_audio",
+          audioBytes,
+          {
+            headers: {
+              "x-cloud-audio-mime": audioMime,
+            },
           },
-        });
+        );
         preparedAudioRef.current = {
           songId: currentSong.id,
           url: audioUrl,

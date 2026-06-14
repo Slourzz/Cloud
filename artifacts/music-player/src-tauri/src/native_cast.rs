@@ -295,7 +295,19 @@ pub async fn prepare_cast_audio(
 ) -> Result<String, String> {
     let bytes = match request.body() {
         InvokeBody::Raw(bytes) => bytes.clone(),
-        _ => return Err("Cloud no recibio el audio en formato binario.".to_string()),
+        InvokeBody::Json(Value::Array(values)) => values
+            .iter()
+            .map(|value| {
+                value
+                    .as_u64()
+                    .filter(|value| *value <= u8::MAX as u64)
+                    .map(|value| value as u8)
+                    .ok_or_else(|| "Cloud recibio datos de audio invalidos.".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        InvokeBody::Json(_) => {
+            return Err("Cloud no recibio el audio en formato binario.".to_string())
+        }
     };
     if bytes.is_empty() {
         return Err("La cancion no contiene audio para transmitir.".to_string());
