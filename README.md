@@ -43,12 +43,12 @@ Improve your music in Cloud for Windows!
 ## Installation
 
 1. Go to the [**Releases**](../../releases) section of this repository
-2. Download the latest `.apk` file
-3. On your Android device, enable **Install from unknown sources** in Settings
-4. Open the downloaded `.apk` and follow the on-screen instructions
-5. Enjoy DarkSong! 🎶
+2. Download the latest release file (.msi)
+3. Open the .msi file on your file explorer 
+4. Follow the instructions of the installer
+5. Open the app and enjoy Cloud! 
 
-> **Minimum requirements:** Android 8.0 (Oreo) or higher
+> **Minimum requirements:** Windows 10 or higher
 
 ---
 
