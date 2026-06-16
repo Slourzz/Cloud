@@ -56,7 +56,7 @@ Improve your music in Cloud for Windows!
 
 | Platform | Link |
 |----------|------|
-| Discord  | [discord.gg/KCvPnTykKp](https://discord.gg/KCvPnTykKp) |
+| Discord  | [discord.gg/KCvPnTykKp](https://discord.gg/yfJQxVut2q) |
 
 ---
 
