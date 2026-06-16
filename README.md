@@ -34,9 +34,9 @@ Improve your music in Cloud for Windows!
 
 ## Links
 
-- 📲 [Installation](#installation)
-- [Telegram](https://t.me/gabrioffYT)
-- [Discord](https://discord.gg/KCvPnTykKp)
+- [Installation](#installation)
+- [Patreon]()
+- [Discord](https://discord.gg/yfJQxVut2q)
 
 ---
 
