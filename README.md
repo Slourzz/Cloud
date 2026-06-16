@@ -56,7 +56,6 @@ Improve your music in Cloud for Windows!
 
 | Platform | Link |
 |----------|------|
-| Telegram | [t.me/gabrioffYT](https://t.me/gabrioffYT) |
 | Discord  | [discord.gg/KCvPnTykKp](https://discord.gg/KCvPnTykKp) |
 
 ---
