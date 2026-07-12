@@ -893,6 +893,9 @@ app.get("/health", async (_req, res) => {
 
 app.get("/api/maintenance/status", async (_req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.json({
       ok: true,
       ...(await getMaintenanceSnapshot()),
@@ -1115,6 +1118,7 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
 
     const maintenance = await getMaintenanceSnapshot();
     if (maintenance.lyrics.active) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       res.status(503).json({
         error: "Community TTML is under maintenance",
         code: "COMMUNITY_TTML_MAINTENANCE",
@@ -1185,6 +1189,7 @@ app.get("/api/ttml/approved", async (req, res) => {
 
   const maintenance = await getMaintenanceSnapshot();
   if (maintenance.lyrics.active) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.status(503).json({
       error: "Community TTML is under maintenance",
       code: "COMMUNITY_TTML_MAINTENANCE",
