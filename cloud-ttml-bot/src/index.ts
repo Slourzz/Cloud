@@ -77,13 +77,31 @@ const configuredOrigins = (
   .map((origin) => origin.trim())
   .filter(Boolean);
 const allowedOrigins = new Set([
+  "http://localhost",
   "http://localhost:3000",
+  "http://localhost:1420",
+  "http://127.0.0.1",
   "http://127.0.0.1:3000",
+  "http://127.0.0.1:1420",
   "http://tauri.localhost",
   "https://tauri.localhost",
   "tauri://localhost",
   ...configuredOrigins,
 ]);
+
+function isAllowedOrigin(origin: string | undefined) {
+  if (!origin || allowedOrigins.has(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
 
 if (!token) {
   throw new Error("Missing DISCORD_TOKEN in .env");
@@ -137,12 +155,12 @@ const upload = multer({
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
 
-      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+      callback(null, false);
     },
   }),
 );
