@@ -339,20 +339,27 @@ function parseMaintenanceTiming(interaction: ChatInputCommandInteraction) {
   const durationDays = interaction.options.getNumber("duration_days") ?? 0;
   const durationHours = interaction.options.getNumber("duration_hours") ?? 0;
   const durationMinutes = interaction.options.getNumber("duration_minutes") ?? 0;
+  const hasExplicitDuration =
+    interaction.options.getNumber("duration_days") !== null ||
+    interaction.options.getNumber("duration_hours") !== null ||
+    interaction.options.getNumber("duration_minutes") !== null;
 
   const startDelayMs =
     startsInHours * 60 * 60 * 1000 + startsInMinutes * 60 * 1000;
-  const durationMs =
-    durationDays * 24 * 60 * 60 * 1000 +
-    durationHours * 60 * 60 * 1000 +
-    durationMinutes * 60 * 1000;
+  const durationMs = hasExplicitDuration
+    ? durationDays * 24 * 60 * 60 * 1000 +
+      durationHours * 60 * 60 * 1000 +
+      durationMinutes * 60 * 1000
+    : 60 * 60 * 1000;
 
   if (startDelayMs < 0) {
     throw new Error("El inicio no puede estar en negativo.");
   }
 
   if (durationMs <= 0) {
-    throw new Error("La duracion debe ser mayor a 0.");
+    throw new Error(
+      "La duracion debe ser mayor a 0. Si solo quieres programarlo, puedes poner starts_in_minutes sin duration.",
+    );
   }
 
   const startsAt = new Date(Date.now() + startDelayMs);
