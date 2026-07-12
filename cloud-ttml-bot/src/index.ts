@@ -11,19 +11,27 @@ import {
   ButtonStyle,
   ChannelType,
   Client,
+  type ChatInputCommandInteraction,
   EmbedBuilder,
   GatewayIntentBits,
   ModalBuilder,
   type ModalSubmitInteraction,
+  REST,
+  Routes,
   type TextChannel,
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
+import { buildCommandDefinitions } from "./slash-commands.js";
 import {
   closeSubmissionStore,
   completeDiscordAuthRequest,
   countSubmissions,
   createDiscordAuthRequest,
+  createMaintenanceEvent,
+  deleteAllCommunityTtmlsWithBackup,
+  endMaintenanceEvent,
+  getMaintenanceSnapshot,
   getApprovedSubmission,
   getDiscordAuthRequest,
   getDiscordSession,
@@ -32,7 +40,9 @@ import {
   initializeSubmissionStore,
   isDatabaseEnabled,
   saveSubmission,
+  acknowledgeMaintenanceNotice,
   type DiscordIdentity,
+  type MaintenanceType,
   type SongPayload,
   type TTMLSubmission,
 } from "./submission-store.js";
@@ -43,6 +53,8 @@ const port = Number(process.env.PORT ?? 8787);
 const discordClientId = process.env.DISCORD_CLIENT_ID;
 const discordClientSecret = process.env.DISCORD_CLIENT_SECRET;
 const discordGuildId = process.env.DISCORD_GUILD_ID;
+const discordOwnerUserId = process.env.DISCORD_OWNER_USER_ID;
+const discordCreatorRoleId = process.env.DISCORD_CREATOR_ROLE_ID;
 const publicBaseUrl = (
   process.env.PUBLIC_BASE_URL ||
   (process.env.RAILWAY_PUBLIC_DOMAIN
@@ -52,6 +64,7 @@ const publicBaseUrl = (
 const discordRedirectUri =
   process.env.DISCORD_REDIRECT_URI ||
   `${publicBaseUrl}/api/auth/discord/callback`;
+let slashCommandsRegistered = false;
 const configuredOrigins = (
   process.env.CLOUD_APP_ORIGINS ??
   process.env.CLOUD_APP_ORIGIN ??
@@ -92,6 +105,14 @@ const interactionPrefix = `railwayreview:${interactionNamespace}:`;
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
+
+const pendingDeleteConfirmations = new Map<
+  string,
+  {
+    actor: DiscordIdentity;
+    expiresAt: number;
+  }
+>();
 
 const app = express();
 const upload = multer({
@@ -246,6 +267,133 @@ function renderOAuthResult(title: string, message: string, success: boolean) {
 
 function createSubmissionId() {
   return `ttml_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createMaintenanceId(type: MaintenanceType) {
+  return `maintenance_${type}_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+}
+
+function createDeleteConfirmationId() {
+  return `delete_${Date.now()}_${randomBytes(4).toString("hex")}`;
+}
+
+function discordIdentityFromInteraction(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+): DiscordIdentity {
+  return {
+    id: interaction.user.id,
+    username: interaction.user.username,
+    displayName: interaction.user.globalName ?? interaction.user.username,
+    avatarUrl: getDiscordAvatarUrl({
+      id: interaction.user.id,
+      avatar: interaction.user.avatar,
+    }),
+  };
+}
+
+function interactionRoleIds(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+) {
+  const roles = interaction.member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return roles;
+  if ("cache" in roles) return [...roles.cache.keys()];
+  return [];
+}
+
+function canManageMaintenance(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+) {
+  if (discordOwnerUserId && interaction.user.id === discordOwnerUserId) {
+    return true;
+  }
+
+  if (discordCreatorRoleId) {
+    return interactionRoleIds(interaction).includes(discordCreatorRoleId);
+  }
+
+  return false;
+}
+
+function formatMaintenanceEvent(event: {
+  id: string;
+  status: string;
+  startsAtUtc: string;
+  endsAtUtc: string;
+  reason?: string;
+}) {
+  return [
+    `ID: ${event.id}`,
+    `Estado: ${event.status}`,
+    `Inicio UTC: ${event.startsAtUtc}`,
+    `Fin UTC: ${event.endsAtUtc}`,
+    `Razon: ${event.reason || "Sin razon"}`,
+  ].join("\n");
+}
+
+function parseMaintenanceTiming(interaction: ChatInputCommandInteraction) {
+  const startsInHours = interaction.options.getNumber("starts_in_hours") ?? 0;
+  const startsInMinutes = interaction.options.getNumber("starts_in_minutes") ?? 0;
+  const durationDays = interaction.options.getNumber("duration_days") ?? 0;
+  const durationHours = interaction.options.getNumber("duration_hours") ?? 0;
+  const durationMinutes = interaction.options.getNumber("duration_minutes") ?? 0;
+
+  const startDelayMs =
+    startsInHours * 60 * 60 * 1000 + startsInMinutes * 60 * 1000;
+  const durationMs =
+    durationDays * 24 * 60 * 60 * 1000 +
+    durationHours * 60 * 60 * 1000 +
+    durationMinutes * 60 * 1000;
+
+  if (startDelayMs < 0) {
+    throw new Error("El inicio no puede estar en negativo.");
+  }
+
+  if (durationMs <= 0) {
+    throw new Error("La duracion debe ser mayor a 0.");
+  }
+
+  const startsAt = new Date(Date.now() + startDelayMs);
+  const endsAt = new Date(startsAt.getTime() + durationMs);
+
+  return {
+    startsAtUtc: startsAt.toISOString(),
+    endsAtUtc: endsAt.toISOString(),
+  };
+}
+
+async function registerSlashCommands() {
+  if (slashCommandsRegistered) return;
+
+  if (!discordClientId) {
+    console.warn("DISCORD_CLIENT_ID is not configured. Slash commands skipped.");
+    return;
+  }
+
+  const rest = new REST({ version: "10" }).setToken(discordToken);
+  const body = buildCommandDefinitions();
+  if (discordGuildId) {
+    await rest.put(
+      Routes.applicationGuildCommands(discordClientId, discordGuildId),
+      { body },
+    );
+    console.log(
+      `Cloud slash commands registered for guild ${discordGuildId}: ${body
+        .map((command) => command.name)
+        .join(", ")}`,
+    );
+  } else {
+    await rest.put(Routes.applicationCommands(discordClientId), { body });
+    console.log(
+      `Cloud slash commands registered globally: ${body
+        .map((command) => command.name)
+        .join(", ")}`,
+    );
+  }
+
+  slashCommandsRegistered = true;
 }
 
 function formatDuration(duration?: number) {
@@ -512,6 +660,181 @@ async function handleReviewModal(interaction: ModalSubmitInteraction) {
   });
 }
 
+async function handleDeleteAllCommand(interaction: ChatInputCommandInteraction) {
+  if (!canManageMaintenance(interaction)) {
+    await interaction.reply({
+      content: "No tienes permiso para ejecutar este comando.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const confirmationId = createDeleteConfirmationId();
+  pendingDeleteConfirmations.set(confirmationId, {
+    actor: discordIdentityFromInteraction(interaction),
+    expiresAt: Date.now() + 60_000,
+  });
+
+  await interaction.reply({
+    content:
+      "Esto eliminara solo TTML comunitarios de PostgreSQL y creara backup antes de borrar. La confirmacion vence en 60 segundos.",
+    components: [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${interactionPrefix}delete-confirm:${confirmationId}`)
+          .setLabel("Continuar")
+          .setStyle(ButtonStyle.Danger),
+      ),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function handleDeleteConfirmationButton(interaction: ButtonInteraction) {
+  const [, namespace, action, confirmationId] = interaction.customId.split(":");
+  if (namespace !== interactionNamespace || action !== "delete-confirm") return;
+
+  const confirmation = pendingDeleteConfirmations.get(confirmationId);
+  if (
+    !confirmation ||
+    confirmation.actor.id !== interaction.user.id ||
+    confirmation.expiresAt <= Date.now()
+  ) {
+    pendingDeleteConfirmations.delete(confirmationId);
+    await interaction.reply({
+      content: "La confirmacion vencio o no pertenece a tu usuario.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`${interactionPrefix}delete-modal:${confirmationId}`)
+    .setTitle("Confirmar borrado TTML");
+  const input = new TextInputBuilder()
+    .setCustomId("confirmation")
+    .setLabel("Escribe DELETE ALL COMMUNITY TTMLS")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(80);
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(input),
+  );
+  await interaction.showModal(modal);
+}
+
+async function handleDeleteConfirmationModal(
+  interaction: ModalSubmitInteraction,
+) {
+  const [, namespace, action, confirmationId] = interaction.customId.split(":");
+  if (namespace !== interactionNamespace || action !== "delete-modal") return;
+
+  const confirmation = pendingDeleteConfirmations.get(confirmationId);
+  pendingDeleteConfirmations.delete(confirmationId);
+
+  if (
+    !confirmation ||
+    confirmation.actor.id !== interaction.user.id ||
+    confirmation.expiresAt <= Date.now()
+  ) {
+    await interaction.reply({
+      content: "La confirmacion vencio o no pertenece a tu usuario.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const text = interaction.fields.getTextInputValue("confirmation").trim();
+  if (text !== "DELETE ALL COMMUNITY TTMLS") {
+    await interaction.reply({
+      content: "Texto incorrecto. No se borro nada.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  const result = await deleteAllCommunityTtmlsWithBackup({
+    batchId: `ttml_delete_${Date.now()}_${randomBytes(4).toString("hex")}`,
+    actor: confirmation.actor,
+  });
+  await interaction.editReply(
+    `Listo. TTML comunitarios eliminados: ${result.deletedCount}. Backup: ${result.backupBatchId}.`,
+  );
+}
+
+async function handleMaintenanceCommand(
+  interaction: ChatInputCommandInteraction,
+  type: MaintenanceType,
+) {
+  if (!canManageMaintenance(interaction)) {
+    await interaction.reply({
+      content: "No tienes permiso para ejecutar este comando.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const subcommand = interaction.options.getSubcommand();
+  const actor = discordIdentityFromInteraction(interaction);
+
+  if (subcommand === "start") {
+    try {
+      const timing = parseMaintenanceTiming(interaction);
+      const reason = interaction.options.getString("reason")?.trim();
+      const event = await createMaintenanceEvent({
+        id: createMaintenanceId(type),
+        type,
+        startsAtUtc: timing.startsAtUtc,
+        endsAtUtc: timing.endsAtUtc,
+        reason: reason || undefined,
+        createdBy: actor,
+      });
+
+      await interaction.reply({
+        content: `Mantenimiento ${type === "lyrics" ? "de letras" : "global"} programado.\n${formatMaintenanceEvent(event)}`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      await interaction.reply({
+        content:
+          error instanceof Error
+            ? error.message
+            : "No se pudo programar el mantenimiento.",
+        ephemeral: true,
+      });
+    }
+    return;
+  }
+
+  if (subcommand === "end") {
+    const event = await endMaintenanceEvent(type, actor);
+    await interaction.reply({
+      content: event
+        ? `Mantenimiento finalizado.\n${formatMaintenanceEvent(event)}`
+        : "No hay mantenimiento activo o programado.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const snapshot = await getMaintenanceSnapshot();
+  const status = snapshot[type];
+  await interaction.reply({
+    content: [
+      `Estado de mantenimiento ${type === "lyrics" ? "de letras" : "global"}:`,
+      status.active
+        ? `Activo:\n${formatMaintenanceEvent(status.active)}`
+        : "Activo: ninguno",
+      status.scheduled
+        ? `Programado:\n${formatMaintenanceEvent(status.scheduled)}`
+        : "Programado: ninguno",
+    ].join("\n\n"),
+    ephemeral: true,
+  });
+}
+
 function toReviewResponse(submission: TTMLSubmission) {
   const resultText = buildResultText(submission);
 
@@ -550,6 +873,41 @@ app.get("/health", async (_req, res) => {
       error: message,
     });
   }
+});
+
+app.get("/api/maintenance/status", async (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      ...(await getMaintenanceSnapshot()),
+    });
+  } catch (error) {
+    res.status(503).json({
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo consultar mantenimiento.",
+    });
+  }
+});
+
+app.post("/api/maintenance/ack", async (req, res) => {
+  const eventId = typeof req.body?.eventId === "string" ? req.body.eventId : "";
+  const clientId = typeof req.body?.clientId === "string" ? req.body.clientId : "";
+  const noticeType =
+    typeof req.body?.noticeType === "string" ? req.body.noticeType : "";
+
+  if (!eventId || !clientId || !noticeType) {
+    res.status(400).json({
+      ok: false,
+      error: "eventId, clientId y noticeType son requeridos.",
+    });
+    return;
+  }
+
+  await acknowledgeMaintenanceNotice({ eventId, clientId, noticeType });
+  res.json({ ok: true });
 });
 
 app.post("/api/auth/discord/start", async (_req, res) => {
@@ -739,6 +1097,16 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
       return;
     }
 
+    const maintenance = await getMaintenanceSnapshot();
+    if (maintenance.lyrics.active) {
+      res.status(503).json({
+        error: "Community TTML is under maintenance",
+        code: "COMMUNITY_TTML_MAINTENANCE",
+        maintenance: maintenance.lyrics.active,
+      });
+      return;
+    }
+
     const submitter = await getAuthenticatedDiscordUser(
       req.headers.authorization,
     );
@@ -799,6 +1167,16 @@ app.get("/api/ttml/approved", async (req, res) => {
     return;
   }
 
+  const maintenance = await getMaintenanceSnapshot();
+  if (maintenance.lyrics.active) {
+    res.status(503).json({
+      error: "Community TTML is under maintenance",
+      code: "COMMUNITY_TTML_MAINTENANCE",
+      maintenance: maintenance.lyrics.active,
+    });
+    return;
+  }
+
   const submission = await getApprovedSubmission(artist, title, duration);
 
   if (!submission) {
@@ -838,16 +1216,40 @@ app.get("/api/ttml/review/:submissionId", async (req, res) => {
 
 client.on("ready", () => {
   console.log(`Cloud TTML bot connected as ${client.user?.tag}`);
+  void registerSlashCommands().catch((error) => {
+    console.error("Could not register slash commands:", error);
+  });
   void refreshPendingReviewMessages();
 });
 
 client.on("interactionCreate", async (interaction) => {
   try {
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === "delete-all-ttmls") {
+        await handleDeleteAllCommand(interaction);
+        return;
+      }
+
+      if (interaction.commandName === "maintenance") {
+        await handleMaintenanceCommand(interaction, "lyrics");
+        return;
+      }
+
+      if (interaction.commandName === "maintenance-global") {
+        await handleMaintenanceCommand(interaction, "global");
+        return;
+      }
+    }
+
     if (
       interaction.isButton() &&
       interaction.customId.startsWith(interactionPrefix)
     ) {
-      await handleReviewButton(interaction);
+      if (interaction.customId.includes(":delete-confirm:")) {
+        await handleDeleteConfirmationButton(interaction);
+      } else {
+        await handleReviewButton(interaction);
+      }
       return;
     }
 
@@ -855,7 +1257,11 @@ client.on("interactionCreate", async (interaction) => {
       interaction.isModalSubmit() &&
       interaction.customId.startsWith(interactionPrefix)
     ) {
-      await handleReviewModal(interaction);
+      if (interaction.customId.includes(":delete-modal:")) {
+        await handleDeleteConfirmationModal(interaction);
+      } else {
+        await handleReviewModal(interaction);
+      }
     }
   } catch (error) {
     console.error(error);
@@ -870,6 +1276,9 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 await initializeSubmissionStore();
+await registerSlashCommands().catch((error) => {
+  console.error("Could not register slash commands before login:", error);
+});
 await client.login(discordToken);
 
 const server = app.listen(port, () => {

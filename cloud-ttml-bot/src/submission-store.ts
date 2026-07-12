@@ -1,6 +1,8 @@
 import { Pool, type QueryResultRow } from "pg";
 
 export type SubmissionStatus = "pending" | "approved" | "rejected";
+export type MaintenanceType = "lyrics" | "global";
+export type MaintenanceStatus = "scheduled" | "active" | "ended" | "cancelled";
 
 export type SongPayload = {
   id: string;
@@ -63,6 +65,44 @@ type AuthSessionRow = QueryResultRow & {
   expires_at: string;
 };
 
+export type MaintenanceEvent = {
+  id: string;
+  type: MaintenanceType;
+  status: MaintenanceStatus;
+  startsAtUtc: string;
+  endsAtUtc: string;
+  reason?: string;
+  createdBy?: DiscordIdentity;
+  createdAtUtc: string;
+  endedBy?: DiscordIdentity;
+  endedAtUtc?: string;
+};
+
+type MaintenanceEventRow = QueryResultRow & {
+  id: string;
+  type: MaintenanceType;
+  status: MaintenanceStatus;
+  starts_at_utc: Date | string;
+  ends_at_utc: Date | string;
+  reason: string | null;
+  created_by: DiscordIdentity | null;
+  created_at_utc: Date | string;
+  ended_by: DiscordIdentity | null;
+  ended_at_utc: Date | string | null;
+};
+
+export type MaintenanceSnapshot = {
+  nowUtc: string;
+  lyrics: {
+    active?: MaintenanceEvent;
+    scheduled?: MaintenanceEvent;
+  };
+  global: {
+    active?: MaintenanceEvent;
+    scheduled?: MaintenanceEvent;
+  };
+};
+
 function normalizeSongPart(value: string) {
   return value
     .normalize("NFD")
@@ -93,6 +133,8 @@ const memoryAuthSessions = new Map<
   string,
   { user: DiscordIdentity; expiresAt: number }
 >();
+const memoryMaintenanceEvents = new Map<string, MaintenanceEvent>();
+const memoryMaintenanceAcknowledgements = new Map<string, number>();
 const databaseUrl = process.env.DATABASE_URL;
 const useSsl = process.env.DATABASE_SSL === "true";
 
@@ -118,6 +160,44 @@ function rowToSubmission(row: SubmissionRow): TTMLSubmission {
     channelId: row.channel_id ?? undefined,
     submitter: row.submitter ?? undefined,
     moderator: row.moderator ?? undefined,
+  };
+}
+
+function toIsoDate(value: Date | string | number) {
+  return new Date(value).toISOString();
+}
+
+function rowToMaintenanceEvent(row: MaintenanceEventRow): MaintenanceEvent {
+  return {
+    id: row.id,
+    type: row.type,
+    status: row.status,
+    startsAtUtc: toIsoDate(row.starts_at_utc),
+    endsAtUtc: toIsoDate(row.ends_at_utc),
+    reason: row.reason ?? undefined,
+    createdBy: row.created_by ?? undefined,
+    createdAtUtc: toIsoDate(row.created_at_utc),
+    endedBy: row.ended_by ?? undefined,
+    endedAtUtc: row.ended_at_utc ? toIsoDate(row.ended_at_utc) : undefined,
+  };
+}
+
+function resolveMaintenanceStatus(event: MaintenanceEvent, now = Date.now()) {
+  if (event.status === "ended" || event.status === "cancelled") {
+    return event.status;
+  }
+
+  const startsAt = Date.parse(event.startsAtUtc);
+  const endsAt = Date.parse(event.endsAtUtc);
+  if (Number.isFinite(endsAt) && now >= endsAt) return "ended";
+  if (Number.isFinite(startsAt) && now >= startsAt) return "active";
+  return "scheduled";
+}
+
+function normalizeMaintenanceEvent(event: MaintenanceEvent): MaintenanceEvent {
+  return {
+    ...event,
+    status: resolveMaintenanceStatus(event),
   };
 }
 
@@ -157,6 +237,81 @@ export async function initializeSubmissionStore() {
   `);
 
   await pool.query(`
+    ALTER TABLE ttml_submissions
+    ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'community'
+  `);
+
+  await pool.query(`
+    ALTER TABLE ttml_submissions
+    ADD CONSTRAINT IF NOT EXISTS ttml_submissions_source_check
+    CHECK (source IN ('community', 'lyrically', 'paxsenix', 'lyrics_ovh', 'unknown'))
+  `).catch(async () => {
+    // PostgreSQL versions before 16 do not support IF NOT EXISTS for constraints.
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'ttml_submissions_source_check'
+        ) THEN
+          ALTER TABLE ttml_submissions
+          ADD CONSTRAINT ttml_submissions_source_check
+          CHECK (source IN ('community', 'lyrically', 'paxsenix', 'lyrics_ovh', 'unknown'));
+        END IF;
+      END $$;
+    `);
+  });
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS maintenance_events (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('lyrics', 'global')),
+      status TEXT NOT NULL CHECK (status IN ('scheduled', 'active', 'ended', 'cancelled')),
+      starts_at_utc TIMESTAMPTZ NOT NULL,
+      ends_at_utc TIMESTAMPTZ NOT NULL,
+      reason TEXT,
+      created_by JSONB,
+      created_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ended_by JSONB,
+      ended_at_utc TIMESTAMPTZ
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS maintenance_acknowledgements (
+      event_id TEXT NOT NULL REFERENCES maintenance_events(id) ON DELETE CASCADE,
+      client_id TEXT NOT NULL,
+      notice_type TEXT NOT NULL,
+      acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (event_id, client_id, notice_type)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS maintenance_audit_logs (
+      id BIGSERIAL PRIMARY KEY,
+      event_id TEXT,
+      action TEXT NOT NULL,
+      actor_discord_id TEXT,
+      actor_name TEXT,
+      details JSONB,
+      success BOOLEAN NOT NULL DEFAULT TRUE,
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ttml_delete_backups (
+      batch_id TEXT NOT NULL,
+      submission_id TEXT NOT NULL,
+      row_data JSONB NOT NULL,
+      actor_discord_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (batch_id, submission_id)
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS discord_auth_requests (
       state TEXT PRIMARY KEY,
       status TEXT NOT NULL CHECK (status IN ('pending', 'complete')),
@@ -191,6 +346,11 @@ export async function initializeSubmissionStore() {
     ON ttml_submissions (song_key, status)
   `);
 
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS maintenance_events_type_status_idx
+    ON maintenance_events (type, status, starts_at_utc, ends_at_utc)
+  `);
+
   const missingKeys = await pool.query<{
     id: string;
     song: SongPayload;
@@ -208,6 +368,331 @@ export async function initializeSubmissionStore() {
   }
 
   console.log("PostgreSQL submission store connected");
+}
+
+export async function writeAuditLog(input: {
+  action: string;
+  actor?: DiscordIdentity;
+  eventId?: string;
+  details?: Record<string, unknown>;
+  success?: boolean;
+  error?: string;
+}) {
+  if (!pool) return;
+
+  await pool.query(
+    `
+      INSERT INTO maintenance_audit_logs (
+        event_id,
+        action,
+        actor_discord_id,
+        actor_name,
+        details,
+        success,
+        error
+      )
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+    `,
+    [
+      input.eventId ?? null,
+      input.action,
+      input.actor?.id ?? null,
+      input.actor?.displayName ?? input.actor?.username ?? null,
+      input.details ? JSON.stringify(input.details) : null,
+      input.success ?? true,
+      input.error ?? null,
+    ],
+  );
+}
+
+export async function createMaintenanceEvent(input: {
+  id: string;
+  type: MaintenanceType;
+  startsAtUtc: string;
+  endsAtUtc: string;
+  reason?: string;
+  createdBy?: DiscordIdentity;
+}) {
+  const event = normalizeMaintenanceEvent({
+    id: input.id,
+    type: input.type,
+    status: "scheduled",
+    startsAtUtc: input.startsAtUtc,
+    endsAtUtc: input.endsAtUtc,
+    reason: input.reason,
+    createdBy: input.createdBy,
+    createdAtUtc: new Date().toISOString(),
+  });
+
+  memoryMaintenanceEvents.set(event.id, event);
+
+  if (!pool) return event;
+
+  await pool.query(
+    `
+      INSERT INTO maintenance_events (
+        id,
+        type,
+        status,
+        starts_at_utc,
+        ends_at_utc,
+        reason,
+        created_by
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+    `,
+    [
+      event.id,
+      event.type,
+      event.status,
+      event.startsAtUtc,
+      event.endsAtUtc,
+      event.reason ?? null,
+      event.createdBy ? JSON.stringify(event.createdBy) : null,
+    ],
+  );
+  await writeAuditLog({
+    action: `maintenance_${event.type}_created`,
+    actor: event.createdBy,
+    eventId: event.id,
+    details: {
+      startsAtUtc: event.startsAtUtc,
+      endsAtUtc: event.endsAtUtc,
+      reason: event.reason,
+    },
+  });
+  return event;
+}
+
+export async function endMaintenanceEvent(
+  type: MaintenanceType,
+  actor?: DiscordIdentity,
+) {
+  const snapshot = await getMaintenanceSnapshot();
+  const event = snapshot[type].active ?? snapshot[type].scheduled;
+  if (!event) return undefined;
+
+  const endedEvent: MaintenanceEvent = {
+    ...event,
+    status: "ended",
+    endedBy: actor,
+    endedAtUtc: new Date().toISOString(),
+  };
+  memoryMaintenanceEvents.set(endedEvent.id, endedEvent);
+
+  if (pool) {
+    await pool.query(
+      `
+        UPDATE maintenance_events
+        SET status = 'ended',
+            ended_by = $3::jsonb,
+            ended_at_utc = NOW()
+        WHERE id = $1
+          AND type = $2
+          AND status IN ('scheduled', 'active')
+      `,
+      [event.id, type, actor ? JSON.stringify(actor) : null],
+    );
+    await writeAuditLog({
+      action: `maintenance_${type}_ended`,
+      actor,
+      eventId: event.id,
+    });
+  }
+
+  return endedEvent;
+}
+
+export async function getMaintenanceSnapshot(): Promise<MaintenanceSnapshot> {
+  const now = Date.now();
+  const nowUtc = new Date(now).toISOString();
+
+  if (!pool) {
+    const events = [...memoryMaintenanceEvents.values()]
+      .map((event) => normalizeMaintenanceEvent(event))
+      .filter((event) => event.status === "active" || event.status === "scheduled")
+      .sort((a, b) => Date.parse(a.startsAtUtc) - Date.parse(b.startsAtUtc));
+
+    return {
+      nowUtc,
+      lyrics: {
+        active: events.find((event) => event.type === "lyrics" && event.status === "active"),
+        scheduled: events.find((event) => event.type === "lyrics" && event.status === "scheduled"),
+      },
+      global: {
+        active: events.find((event) => event.type === "global" && event.status === "active"),
+        scheduled: events.find((event) => event.type === "global" && event.status === "scheduled"),
+      },
+    };
+  }
+
+  await pool.query(
+    `
+      UPDATE maintenance_events
+      SET status = 'ended',
+          ended_at_utc = COALESCE(ended_at_utc, NOW())
+      WHERE status IN ('scheduled', 'active')
+        AND ends_at_utc <= NOW()
+    `,
+  );
+  await pool.query(
+    `
+      UPDATE maintenance_events
+      SET status = 'active'
+      WHERE status = 'scheduled'
+        AND starts_at_utc <= NOW()
+        AND ends_at_utc > NOW()
+    `,
+  );
+
+  const result = await pool.query<MaintenanceEventRow>(
+    `
+      SELECT
+        id,
+        type,
+        status,
+        starts_at_utc,
+        ends_at_utc,
+        reason,
+        created_by,
+        created_at_utc,
+        ended_by,
+        ended_at_utc
+      FROM maintenance_events
+      WHERE status IN ('scheduled', 'active')
+      ORDER BY starts_at_utc ASC
+    `,
+  );
+
+  const events = result.rows.map(rowToMaintenanceEvent);
+  return {
+    nowUtc,
+    lyrics: {
+      active: events.find((event) => event.type === "lyrics" && event.status === "active"),
+      scheduled: events.find((event) => event.type === "lyrics" && event.status === "scheduled"),
+    },
+    global: {
+      active: events.find((event) => event.type === "global" && event.status === "active"),
+      scheduled: events.find((event) => event.type === "global" && event.status === "scheduled"),
+    },
+  };
+}
+
+export async function acknowledgeMaintenanceNotice(input: {
+  eventId: string;
+  clientId: string;
+  noticeType: string;
+}) {
+  const key = `${input.eventId}:${input.clientId}:${input.noticeType}`;
+  memoryMaintenanceAcknowledgements.set(key, Date.now());
+
+  if (!pool) return;
+
+  await pool.query(
+    `
+      INSERT INTO maintenance_acknowledgements (
+        event_id,
+        client_id,
+        notice_type
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (event_id, client_id, notice_type) DO UPDATE SET
+        acknowledged_at = NOW()
+    `,
+    [input.eventId, input.clientId, input.noticeType],
+  );
+}
+
+export async function deleteAllCommunityTtmlsWithBackup(input: {
+  batchId: string;
+  actor: DiscordIdentity;
+}) {
+  if (!pool) {
+    const submissions = [...memorySubmissions.values()];
+    const count = submissions.length;
+    memorySubmissions.clear();
+    return { deletedCount: count, backupBatchId: input.batchId };
+  }
+
+  await pool.query("BEGIN");
+  try {
+    const candidates = await pool.query<QueryResultRow>(
+      `
+        SELECT to_jsonb(ttml_submissions.*) AS row_data, id
+        FROM ttml_submissions
+        WHERE source = 'community'
+      `,
+    );
+
+    for (const row of candidates.rows) {
+      await pool.query(
+        `
+          INSERT INTO ttml_delete_backups (
+            batch_id,
+            submission_id,
+            row_data,
+            actor_discord_id
+          )
+          VALUES ($1, $2, $3::jsonb, $4)
+        `,
+        [
+          input.batchId,
+          row.id,
+          JSON.stringify(row.row_data),
+          input.actor.id,
+        ],
+      );
+    }
+
+    const deleted = await pool.query<{ count: string }>(
+      `
+        WITH deleted AS (
+          DELETE FROM ttml_submissions
+          WHERE source = 'community'
+          RETURNING id
+        )
+        SELECT COUNT(*)::text AS count FROM deleted
+      `,
+    );
+
+    await pool.query(
+      `
+        INSERT INTO maintenance_audit_logs (
+          action,
+          actor_discord_id,
+          actor_name,
+          details,
+          success
+        )
+        VALUES ($1, $2, $3, $4::jsonb, TRUE)
+      `,
+      [
+        "delete_all_community_ttmls",
+        input.actor.id,
+        input.actor.displayName || input.actor.username,
+        JSON.stringify({
+          batchId: input.batchId,
+          deletedCount: Number(deleted.rows[0]?.count ?? 0),
+        }),
+      ],
+    );
+
+    await pool.query("COMMIT");
+    return {
+      deletedCount: Number(deleted.rows[0]?.count ?? 0),
+      backupBatchId: input.batchId,
+    };
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    await writeAuditLog({
+      action: "delete_all_community_ttmls",
+      actor: input.actor,
+      details: { batchId: input.batchId },
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 export async function saveSubmission(submission: TTMLSubmission) {
