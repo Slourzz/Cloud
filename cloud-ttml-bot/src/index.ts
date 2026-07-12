@@ -30,7 +30,9 @@ import {
   createDiscordAuthRequest,
   createMaintenanceEvent,
   deleteAllCommunityTtmlsWithBackup,
+  deleteCommunityTtmlsWithBackup,
   endMaintenanceEvent,
+  findCommunityTtmls,
   getMaintenanceSnapshot,
   getApprovedSubmission,
   getDiscordAuthRequest,
@@ -40,6 +42,7 @@ import {
   initializeSubmissionStore,
   isDatabaseEnabled,
   saveSubmission,
+  restoreLatestCommunityTtmlBackup,
   acknowledgeMaintenanceNotice,
   type DiscordIdentity,
   type MaintenanceType,
@@ -110,6 +113,15 @@ const pendingDeleteConfirmations = new Map<
   string,
   {
     actor: DiscordIdentity;
+    expiresAt: number;
+  }
+>();
+const pendingSpecificDeleteConfirmations = new Map<
+  string,
+  {
+    actor: DiscordIdentity;
+    artist: string;
+    title: string;
     expiresAt: number;
   }
 >();
@@ -780,6 +792,114 @@ async function handleDeleteConfirmationModal(
   );
 }
 
+async function handleDeleteTtmlCommand(interaction: ChatInputCommandInteraction) {
+  if (!canManageMaintenance(interaction)) {
+    await interaction.reply({
+      content: "No tienes permiso para ejecutar este comando.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const title = interaction.options.getString("cancion", true).trim();
+  const artist = interaction.options.getString("artista", true).trim();
+  const matches = await findCommunityTtmls(artist, title);
+  if (matches.length === 0) {
+    await interaction.reply({
+      content: "No se encontro algun TTML con esa cancion y artista.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const confirmationId = createDeleteConfirmationId();
+  pendingSpecificDeleteConfirmations.set(confirmationId, {
+    actor: discordIdentityFromInteraction(interaction),
+    artist,
+    title,
+    expiresAt: Date.now() + 60_000,
+  });
+  const latest = matches[0];
+  await interaction.reply({
+    content: [
+      `Se encontro **${latest.song.title}** de **${latest.song.artist}**.`,
+      `Coincidencias comunitarias: ${matches.length}.`,
+      "Quieres eliminar este TTML? Se creara un respaldo antes de borrarlo.",
+    ].join("\n"),
+    components: [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${interactionPrefix}delete-ttml-confirm:${confirmationId}`)
+          .setLabel("Eliminar")
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`${interactionPrefix}delete-ttml-cancel:${confirmationId}`)
+          .setLabel("Cancelar")
+          .setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function handleDeleteTtmlButton(interaction: ButtonInteraction) {
+  const [, namespace, action, confirmationId] = interaction.customId.split(":");
+  if (namespace !== interactionNamespace) return;
+  const confirmation = pendingSpecificDeleteConfirmations.get(confirmationId);
+  pendingSpecificDeleteConfirmations.delete(confirmationId);
+
+  if (action === "delete-ttml-cancel") {
+    await interaction.update({ content: "Eliminacion cancelada.", components: [] });
+    return;
+  }
+  if (action !== "delete-ttml-confirm") return;
+  if (
+    !confirmation ||
+    confirmation.actor.id !== interaction.user.id ||
+    confirmation.expiresAt <= Date.now()
+  ) {
+    await interaction.update({
+      content: "La confirmacion vencio o no pertenece a tu usuario.",
+      components: [],
+    });
+    return;
+  }
+
+  await interaction.deferUpdate();
+  const result = await deleteCommunityTtmlsWithBackup({
+    batchId: `ttml_delete_song_${Date.now()}_${randomBytes(4).toString("hex")}`,
+    actor: confirmation.actor,
+    artist: confirmation.artist,
+    title: confirmation.title,
+  });
+  await interaction.editReply({
+    content: `TTML eliminados: ${result.deletedCount}. Backup: ${result.backupBatchId}.`,
+    components: [],
+  });
+}
+
+async function handleRestoreTtmlBackupCommand(
+  interaction: ChatInputCommandInteraction,
+) {
+  if (!canManageMaintenance(interaction)) {
+    await interaction.reply({
+      content: "No tienes permiso para ejecutar este comando.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  const result = await restoreLatestCommunityTtmlBackup({
+    actor: discordIdentityFromInteraction(interaction),
+  });
+  await interaction.editReply(
+    result.backupBatchId
+      ? `Respaldo restaurado globalmente. TTML restaurados: ${result.restoredCount}. Backup: ${result.backupBatchId}.`
+      : "No se encontro algun respaldo TTML para restaurar.",
+  );
+}
+
 async function handleMaintenanceCommand(
   interaction: ChatInputCommandInteraction,
   type: MaintenanceType,
@@ -1262,6 +1382,23 @@ client.on("interactionCreate", async (interaction) => {
         await handleMaintenanceCommand(interaction, "global");
         return;
       }
+
+      if (
+        interaction.commandName === "restore" &&
+        interaction.options.getSubcommandGroup(false) === "ttml" &&
+        interaction.options.getSubcommand() === "backup"
+      ) {
+        await handleRestoreTtmlBackupCommand(interaction);
+        return;
+      }
+
+      if (
+        interaction.commandName === "delete" &&
+        interaction.options.getSubcommand() === "ttml"
+      ) {
+        await handleDeleteTtmlCommand(interaction);
+        return;
+      }
     }
 
     if (
@@ -1270,6 +1407,8 @@ client.on("interactionCreate", async (interaction) => {
     ) {
       if (interaction.customId.includes(":delete-confirm:")) {
         await handleDeleteConfirmationButton(interaction);
+      } else if (interaction.customId.includes(":delete-ttml-")) {
+        await handleDeleteTtmlButton(interaction);
       } else {
         await handleReviewButton(interaction);
       }

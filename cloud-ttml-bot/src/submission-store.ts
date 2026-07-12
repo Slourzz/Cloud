@@ -135,6 +135,7 @@ const memoryAuthSessions = new Map<
 >();
 const memoryMaintenanceEvents = new Map<string, MaintenanceEvent>();
 const memoryMaintenanceAcknowledgements = new Map<string, number>();
+const memoryDeleteBackups = new Map<string, TTMLSubmission[]>();
 const databaseUrl = process.env.DATABASE_URL;
 const useSsl = process.env.DATABASE_SSL === "true";
 
@@ -610,6 +611,7 @@ export async function deleteAllCommunityTtmlsWithBackup(input: {
   if (!pool) {
     const submissions = [...memorySubmissions.values()];
     const count = submissions.length;
+    memoryDeleteBackups.set(input.batchId, submissions);
     memorySubmissions.clear();
     return { deletedCount: count, backupBatchId: input.batchId };
   }
@@ -693,6 +695,199 @@ export async function deleteAllCommunityTtmlsWithBackup(input: {
     });
     throw error;
   }
+}
+
+export async function findCommunityTtmls(artist: string, title: string) {
+  const songKey = createSongKey(artist, title);
+  if (!pool) {
+    return [...memorySubmissions.values()]
+      .filter(
+        (submission) =>
+          createSongKey(submission.song.artist, submission.song.title) === songKey,
+      )
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  const result = await pool.query<SubmissionRow>(
+    `
+      SELECT
+        id,
+        song,
+        file_name,
+        ttml_content,
+        status,
+        created_at,
+        message_id,
+        channel_id,
+        submitter,
+        moderator
+      FROM ttml_submissions
+      WHERE source = 'community'
+        AND song_key = $1
+      ORDER BY updated_at DESC
+    `,
+    [songKey],
+  );
+  return result.rows.map(rowToSubmission);
+}
+
+export async function deleteCommunityTtmlsWithBackup(input: {
+  batchId: string;
+  actor: DiscordIdentity;
+  artist: string;
+  title: string;
+}) {
+  const songKey = createSongKey(input.artist, input.title);
+  if (!pool) {
+    const matches = await findCommunityTtmls(input.artist, input.title);
+    memoryDeleteBackups.set(input.batchId, matches);
+    matches.forEach((submission) => memorySubmissions.delete(submission.id));
+    return { deletedCount: matches.length, backupBatchId: input.batchId };
+  }
+
+  await pool.query("BEGIN");
+  try {
+    const candidates = await pool.query<QueryResultRow>(
+      `
+        SELECT to_jsonb(ttml_submissions.*) AS row_data, id
+        FROM ttml_submissions
+        WHERE source = 'community'
+          AND song_key = $1
+      `,
+      [songKey],
+    );
+
+    for (const row of candidates.rows) {
+      await pool.query(
+        `
+          INSERT INTO ttml_delete_backups (
+            batch_id,
+            submission_id,
+            row_data,
+            actor_discord_id
+          )
+          VALUES ($1, $2, $3::jsonb, $4)
+          ON CONFLICT (batch_id, submission_id) DO NOTHING
+        `,
+        [input.batchId, row.id, JSON.stringify(row.row_data), input.actor.id],
+      );
+    }
+
+    const deleted = await pool.query<{ count: string }>(
+      `
+        WITH deleted AS (
+          DELETE FROM ttml_submissions
+          WHERE source = 'community'
+            AND song_key = $1
+          RETURNING id
+        )
+        SELECT COUNT(*)::text AS count FROM deleted
+      `,
+      [songKey],
+    );
+    const deletedCount = Number(deleted.rows[0]?.count ?? 0);
+    await writeAuditLog({
+      action: "delete_community_ttml",
+      actor: input.actor,
+      details: {
+        batchId: input.batchId,
+        artist: input.artist,
+        title: input.title,
+        deletedCount,
+      },
+    });
+    await pool.query("COMMIT");
+    return { deletedCount, backupBatchId: input.batchId };
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    throw error;
+  }
+}
+
+export async function restoreLatestCommunityTtmlBackup(input: {
+  actor: DiscordIdentity;
+  batchId?: string;
+}) {
+  if (!pool) {
+    const batchId = input.batchId || [...memoryDeleteBackups.keys()].at(-1);
+    if (!batchId) return { restoredCount: 0, backupBatchId: undefined };
+    const submissions = memoryDeleteBackups.get(batchId) ?? [];
+    submissions.forEach((submission) =>
+      memorySubmissions.set(submission.id, submission),
+    );
+    return { restoredCount: submissions.length, backupBatchId: batchId };
+  }
+
+  const batchId = input.batchId || (
+    await pool.query<{ batch_id: string }>(
+      `
+        SELECT batch_id
+        FROM ttml_delete_backups
+        GROUP BY batch_id
+        ORDER BY MAX(created_at) DESC
+        LIMIT 1
+      `,
+    )
+  ).rows[0]?.batch_id;
+  if (!batchId) return { restoredCount: 0, backupBatchId: undefined };
+
+  const restored = await pool.query<{ count: string }>(
+    `
+      WITH restored AS (
+        INSERT INTO ttml_submissions (
+          id,
+          song,
+          file_name,
+          ttml_content,
+          status,
+          created_at,
+          message_id,
+          channel_id,
+          submitter,
+          moderator,
+          song_key,
+          updated_at,
+          source
+        )
+        SELECT
+          row_data->>'id',
+          row_data->'song',
+          row_data->>'file_name',
+          row_data->>'ttml_content',
+          row_data->>'status',
+          (row_data->>'created_at')::BIGINT,
+          NULLIF(row_data->>'message_id', ''),
+          NULLIF(row_data->>'channel_id', ''),
+          row_data->'submitter',
+          row_data->'moderator',
+          COALESCE(row_data->>'song_key', ''),
+          COALESCE((row_data->>'updated_at')::TIMESTAMPTZ, NOW()),
+          COALESCE(NULLIF(row_data->>'source', ''), 'community')
+        FROM ttml_delete_backups
+        WHERE batch_id = $1
+        ON CONFLICT (id) DO UPDATE SET
+          song = EXCLUDED.song,
+          file_name = EXCLUDED.file_name,
+          ttml_content = EXCLUDED.ttml_content,
+          status = EXCLUDED.status,
+          submitter = EXCLUDED.submitter,
+          moderator = EXCLUDED.moderator,
+          song_key = EXCLUDED.song_key,
+          updated_at = NOW(),
+          source = EXCLUDED.source
+        RETURNING id
+      )
+      SELECT COUNT(*)::text AS count FROM restored
+    `,
+    [batchId],
+  );
+  const restoredCount = Number(restored.rows[0]?.count ?? 0);
+  await writeAuditLog({
+    action: "restore_community_ttml_backup",
+    actor: input.actor,
+    details: { batchId, restoredCount },
+  });
+  return { restoredCount, backupBatchId: batchId };
 }
 
 export async function saveSubmission(submission: TTMLSubmission) {
