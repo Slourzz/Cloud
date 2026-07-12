@@ -893,9 +893,10 @@ app.get("/health", async (_req, res) => {
 
 app.get("/api/maintenance/status", async (_req, res) => {
   try {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=15, s-maxage=15, stale-if-error=60",
+    );
     res.json({
       ok: true,
       ...(await getMaintenanceSnapshot()),
@@ -1169,6 +1170,7 @@ app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
 });
 
 app.get("/api/ttml/approved", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const artist =
     typeof req.query.artist === "string" ? req.query.artist.trim() : "";
   const title =
