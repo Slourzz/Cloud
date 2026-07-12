@@ -367,6 +367,10 @@ function parseMaintenanceTiming(interaction: ChatInputCommandInteraction) {
 async function registerSlashCommands() {
   if (slashCommandsRegistered) return;
 
+  console.log(
+    `Cloud slash command bootstrap: clientId=${discordClientId ? "yes" : "no"} guildId=${discordGuildId || "global"}`,
+  );
+
   if (!discordClientId) {
     console.warn("DISCORD_CLIENT_ID is not configured. Slash commands skipped.");
     return;
@@ -374,6 +378,11 @@ async function registerSlashCommands() {
 
   const rest = new REST({ version: "10" }).setToken(discordToken);
   const body = buildCommandDefinitions();
+  console.log(
+    `Cloud slash commands registering: ${body
+      .map((command) => command.name)
+      .join(", ")}`,
+  );
   if (discordGuildId) {
     await rest.put(
       Routes.applicationGuildCommands(discordClientId, discordGuildId),
@@ -1214,7 +1223,7 @@ app.get("/api/ttml/review/:submissionId", async (req, res) => {
   res.json(toReviewResponse(submission));
 });
 
-client.on("ready", () => {
+client.on("clientReady", () => {
   console.log(`Cloud TTML bot connected as ${client.user?.tag}`);
   void registerSlashCommands().catch((error) => {
     console.error("Could not register slash commands:", error);
