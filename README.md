@@ -1,36 +1,33 @@
-<p align="center" width="200%">
-  <img src="https://i.postimg.cc/zffmggg5/Cloud.png" alt="Cloud Logo" width="400"/>
+<p align="center">
+  <img src="https://i.postimg.cc/zffmggg5/Cloud.png" alt="Cloud Logo" width="700"/>
 </p>
 
 <p align="center">
-  <a href="../../releases"><img src="https://img.shields.io/github/v/release/Slourzz/Cloud?color=blueviolet&label=latest%20version" alt="Latest Version"/></a>
+  <a href="../../releases"><img src="https://img.shields.io/github/v/release/Slourzz/Cloud?color=white&label=latest%20version" alt="Latest Version"/></a>
 </p>
 
-Improve your music in Cloud for Windows!
-
 ---
+Thank you for downloading my app, I promise you won't regret it.
 
-## Features
 
-<table>
+## Made with love for EVERYONE
+Cloud is a new local music player designed for Windows for those who want an experience identical to that of paid online music players
+
+## Why are you going to like it?
+
 <tr>
-<td valign="top" width="40%">
+<td valign="center" width="40%">
 
-- **Lyrics Design** — Beautiful Lyrics of your songs inspired in Apple Music
-- **Themes** — Improve your experience with our themes in the app
-- **Dynamic Interface** — Dynamic Buttons and IU based on the song cover
+- **Reimagined Lyrics** — A system of animated letters created by [Spikerko](https://github.com/Spikerko) inspired in [Beautiful Lyrics](https://github.com/surfbryce/beautiful-lyrics)
+<img width="400" height="225" alt="GHLyrics" src="https://github.com/user-attachments/assets/16cf6cf9-6ce4-45ed-ba79-f75a1d7d6561" />
+
+
+
+
+- **Customization** — 
+- **Beautiful Interface** —  
 - **Built for Windows** — Smooth and optimized desktop experience
 
-</td>
-<td valign="top" width="60%">
-
-<img src="https://i.postimg.cc/tTYNWXkJ/Diseno-sin-titulo-(7).png" alt="Screenshot" width="100%"/>
-
-</td>
-</tr>
-</table>
-
----
 
 ## Links
 
