@@ -1,4 +1,4 @@
-<p align="center">
+<p align="center" width="200%">
   <img src="https://i.postimg.cc/zffmggg5/Cloud.png" alt="Cloud Logo" width="400"/>
 </p>
 
