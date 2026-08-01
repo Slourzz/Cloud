@@ -476,20 +476,6 @@ select:focus {
   box-shadow: none !important;
 }
 
-/* AMLL Lyrics centering */
-.amll-lyric-player {
-  text-align: center !important;
-}
-.amll-lyric-line {
-  text-align: center !important;
-  justify-content: center !important;
-  width: 100% !important;
-}
-.amll-lyric-line-words {
-  justify-content: center !important;
-  flex-wrap: wrap !important;
-}
-
 /* Desactiva la selección de texto en toda la app */
 * {
   user-select: none;
