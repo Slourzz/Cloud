@@ -87,8 +87,6 @@
     "@iconify/react": "^6.0.2",
     "@kawarp/core": "^1.1.1",
     "@lit/react": "^1.0.8",
-    "@splinetool/react-spline": "^4.1.0",
-    "@splinetool/runtime": "^1.12.94",
     "@tauri-apps/api": "2",
     "@tauri-apps/plugin-deep-link": "~2.4.9",
     "@tauri-apps/plugin-opener": "~2.5.4",
