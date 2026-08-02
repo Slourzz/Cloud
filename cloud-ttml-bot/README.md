@@ -23,6 +23,11 @@ Bot y API local para enviar TTMLs desde Cloud a un canal privado de Discord.
 ```env
 DISCORD_TOKEN=your_bot_token_here
 DISCORD_REVIEW_CHANNEL_ID=your_private_moderator_channel_id
+DISCORD_REPORTS_CHANNEL_ID=1531969113071550750
+DISCORD_PUBLIC_COVERS_CHANNEL_ID=1531969444069376111
+DISCORD_COMMUNITY_ANNOUNCEMENTS_CHANNEL_ID=1531980614151049389
+DISCORD_COMMUNITY_ANNOUNCEMENTS_ROLE_ID=1531980785576443954
+DISCORD_COMMUNITY_ANNOUNCEMENTS_EMOJI_ID=1527636865824587938
 DISCORD_CLIENT_ID=your_discord_application_id
 DISCORD_CLIENT_SECRET=your_discord_oauth_client_secret
 DISCORD_GUILD_ID=your_cloud_discord_server_id
@@ -33,6 +38,20 @@ CLOUD_APP_ORIGIN=http://localhost:3000
 DATABASE_URL=postgresql://postgres:password@localhost:5432/cloud
 DATABASE_SSL=false
 ```
+
+`DISCORD_REPORTS_CHANNEL_ID` debe apuntar a un canal privado donde
+`@everyone` no tenga `ViewChannel` y el rol
+`DISCORD_COVER_REVIEWER_ROLE_ID` sí pueda verlo. En
+`DISCORD_PUBLIC_COVERS_CHANNEL_ID`, `@everyone` debe poder ver el canal pero
+no enviar mensajes. El bot necesita `ViewChannel`, `SendMessages` y
+`EmbedLinks` en ambos. El token y estos IDs solo pertenecen al backend; Cloud
+para Windows nunca los recibe.
+
+El canal de anuncios comunitarios contiene un mensaje persistente con la
+reacción `a_cat_eating`. El bot necesita `AddReactions`, `ReadMessageHistory`
+y `ManageRoles`, y su rol más alto debe estar por encima del rol
+`DISCORD_COMMUNITY_ANNOUNCEMENTS_ROLE_ID`. Los anuncios de portadas mencionan
+ese rol automáticamente.
 
 ## Ejecutar
 

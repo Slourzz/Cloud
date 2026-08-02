@@ -1,4 +1,5 @@
 import { Pool, type QueryResultRow } from "pg";
+import { normalizeCatalogValue } from "./cover-contributions.js";
 
 export type SubmissionStatus = "pending" | "approved" | "rejected";
 export type MaintenanceType = "lyrics" | "global";
@@ -35,9 +36,72 @@ export type TTMLSubmission = {
   moderator?: {
     id: string;
     name: string;
+    avatarUrl?: string;
     comment: string;
   };
 };
+
+export type CommunityCover = {
+  id: string;
+  song: SongPayload;
+  songKey: string;
+  width: number;
+  height: number;
+  byteLength: number;
+  sha256: string;
+  originalFileName: string;
+  discordAttachmentId: string;
+  threadId: string;
+  forumId: string;
+  submitter: DiscordIdentity;
+  moderator: DiscordIdentity;
+  createdAt: string;
+  updatedAt: string;
+  requestedSongKey?: string;
+};
+
+export type ArtistMediaKind = "avatar" | "banner";
+
+export type ArtistReference = {
+  id: string;
+  name: string;
+  referenceUrl: string;
+  provider: string;
+  genre?: string;
+};
+
+export type CommunityArtistMedia = {
+  id: string;
+  artist: ArtistReference;
+  artistKey: string;
+  kind: ArtistMediaKind;
+  width: number;
+  height: number;
+  byteLength: number;
+  sha256: string;
+  originalFileName: string;
+  discordAttachmentId: string;
+  threadId: string;
+  forumId: string;
+  submitter: DiscordIdentity;
+  moderator: DiscordIdentity;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export class CommunityArtistMediaAlreadyApprovedError extends Error {
+  constructor() {
+    super("Esta contribucion de artista ya fue aprobada.");
+    this.name = "CommunityArtistMediaAlreadyApprovedError";
+  }
+}
+
+export class CommunityCoverAlreadyApprovedError extends Error {
+  constructor() {
+    super("Esta contribucion ya fue aprobada.");
+    this.name = "CommunityCoverAlreadyApprovedError";
+  }
+}
 
 type SubmissionRow = QueryResultRow & {
   id: string;
@@ -91,6 +155,45 @@ type MaintenanceEventRow = QueryResultRow & {
   ended_at_utc: Date | string | null;
 };
 
+type CommunityCoverRow = QueryResultRow & {
+  id: string;
+  song: SongPayload;
+  song_key: string;
+  png_data?: Buffer;
+  width: number;
+  height: number;
+  byte_length: number;
+  sha256: string;
+  original_file_name: string;
+  discord_attachment_id: string;
+  thread_id: string;
+  forum_id: string;
+  submitter: DiscordIdentity;
+  moderator: DiscordIdentity;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type CommunityArtistMediaRow = QueryResultRow & {
+  id: string;
+  artist: ArtistReference;
+  artist_key: string;
+  asset_kind: ArtistMediaKind;
+  png_data?: Buffer;
+  width: number;
+  height: number;
+  byte_length: number;
+  sha256: string;
+  original_file_name: string;
+  discord_attachment_id: string;
+  thread_id: string;
+  forum_id: string;
+  submitter: DiscordIdentity;
+  moderator: DiscordIdentity;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
 export type MaintenanceSnapshot = {
   nowUtc: string;
   lyrics: {
@@ -119,6 +222,130 @@ export function createSongKey(artist: string, title: string) {
   return `${normalizeSongPart(artist)}::${normalizeSongPart(title)}`;
 }
 
+function normalizeCatalogWords(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en")
+    .replace(/&/g, " and ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function getBaseCatalogTitle(value: string) {
+  return value
+    .replace(
+      /\s*[\[(]\s*(?:feat(?:uring)?|ft|with)\b[^\])]*[\])]\s*/giu,
+      " ",
+    )
+    .replace(
+      /\s+(?:feat(?:uring)?|ft|with)\.?\s+.+$/giu,
+      " ",
+    )
+    .trim();
+}
+
+function getCatalogArtists(artist: string, title: string) {
+  const collaborators = [...title.matchAll(
+    /[\[(]\s*(?:feat(?:uring)?|ft|with)\.?\s+([^\])]+)[\])]/giu,
+  )].flatMap((match) => match[1]?.split(/,|&|\band\b|\bx\b/giu) ?? []);
+  return [...artist.split(/,|&|\band\b|\bx\b|feat(?:uring)?|ft\.?/giu), ...collaborators]
+    .map(normalizeCatalogWords)
+    .filter(Boolean);
+}
+
+const catalogVersionMarkers = [
+  "remix",
+  "live",
+  "acoustic",
+  "instrumental",
+  "sped up",
+  "slowed",
+  "nightcore",
+  "radio edit",
+  "demo",
+];
+
+export function scoreSongIdentity(
+  request: Pick<SongPayload, "artist" | "title" | "duration">,
+  candidate: Pick<SongPayload, "artist" | "title" | "duration">,
+) {
+  const requestTitle = normalizeCatalogWords(request.title);
+  const candidateTitle = normalizeCatalogWords(candidate.title);
+  const requestBase = normalizeCatalogWords(getBaseCatalogTitle(request.title));
+  const candidateBase = normalizeCatalogWords(getBaseCatalogTitle(candidate.title));
+  if (!requestBase || requestBase !== candidateBase) return Number.NEGATIVE_INFINITY;
+
+  const requestArtists = getCatalogArtists(request.artist, request.title);
+  const candidateArtists = getCatalogArtists(candidate.artist, candidate.title);
+  const sharedArtists = requestArtists.filter((value) =>
+    candidateArtists.includes(value),
+  );
+  if (
+    requestArtists.length > 0 &&
+    candidateArtists.length > 0 &&
+    sharedArtists.length === 0
+  ) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const mismatchedVersion = catalogVersionMarkers.some((marker) => {
+    const requestHas = requestTitle.includes(marker);
+    const candidateHas = candidateTitle.includes(marker);
+    return requestHas !== candidateHas;
+  });
+  if (mismatchedVersion) return Number.NEGATIVE_INFINITY;
+
+  let score = requestTitle === candidateTitle ? 150 : 115;
+  if (requestArtists[0] && requestArtists[0] === candidateArtists[0]) score += 70;
+  score += Math.min(60, sharedArtists.length * 30);
+
+  if (request.duration && candidate.duration) {
+    const delta = Math.abs(request.duration - candidate.duration);
+    if (delta > 12) return Number.NEGATIVE_INFINITY;
+    score += delta <= 2 ? 35 : delta <= 5 ? 20 : 5;
+  }
+  return score;
+}
+
+function pickBestSongMatch<T extends { song: SongPayload }>(
+  request: Pick<SongPayload, "artist" | "title" | "duration">,
+  candidates: T[],
+) {
+  const ranked = candidates
+    .map((candidate) => ({
+      candidate,
+      score: scoreSongIdentity(request, candidate.song),
+    }))
+    .filter(({ score }) => Number.isFinite(score) && score >= 185)
+    .sort((a, b) => b.score - a.score);
+  const best = ranked[0];
+  if (!best || (ranked[1] && best.score - ranked[1].score < 12)) return undefined;
+  return best.candidate;
+}
+
+function normalizeCommunityCoverPart(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function createCommunityCoverKey(artist: string, title: string) {
+  return `${normalizeCommunityCoverPart(artist)}::${normalizeCommunityCoverPart(title)}`;
+}
+
+export function createCommunityArtistMediaKey(
+  artist: Pick<ArtistReference, "id" | "name" | "provider">,
+  kind: ArtistMediaKind,
+) {
+  const identity = artist.id || normalizeCommunityCoverPart(artist.name);
+  return `${normalizeCommunityCoverPart(artist.provider)}::${normalizeCommunityCoverPart(identity)}::${kind}`;
+}
+
 const memorySubmissions = new Map<string, TTMLSubmission>();
 const memoryAuthRequests = new Map<
   string,
@@ -136,6 +363,16 @@ const memoryAuthSessions = new Map<
 const memoryMaintenanceEvents = new Map<string, MaintenanceEvent>();
 const memoryMaintenanceAcknowledgements = new Map<string, number>();
 const memoryDeleteBackups = new Map<string, TTMLSubmission[]>();
+const memoryCommunityCovers = new Map<
+  string,
+  CommunityCover & { pngData: Buffer }
+>();
+const memoryApprovedCoverThreads = new Set<string>();
+const memoryCommunityArtistMedia = new Map<
+  string,
+  CommunityArtistMedia & { pngData: Buffer }
+>();
+const memoryApprovedArtistMediaThreads = new Set<string>();
 const databaseUrl = process.env.DATABASE_URL;
 const useSsl = process.env.DATABASE_SSL === "true";
 
@@ -145,9 +382,74 @@ const pool = databaseUrl
       ssl: useSsl ? { rejectUnauthorized: false } : undefined,
       max: 10,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 30_000,
     })
   : null;
+
+const transientDatabaseErrorCodes = new Set([
+  "08000",
+  "08001",
+  "08003",
+  "08004",
+  "08006",
+  "08007",
+  "08P01",
+  "53300",
+  "53400",
+  "57P01",
+  "57P02",
+  "57P03",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EPIPE",
+  "ETIMEDOUT",
+]);
+
+export function isTransientDatabaseError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  if (
+    "code" in error &&
+    typeof error.code === "string" &&
+    transientDatabaseErrorCodes.has(error.code)
+  ) {
+    return true;
+  }
+
+  if (
+    "errors" in error &&
+    Array.isArray(error.errors) &&
+    error.errors.some(isTransientDatabaseError)
+  ) {
+    return true;
+  }
+
+  if ("cause" in error && isTransientDatabaseError(error.cause)) return true;
+
+  const message = error instanceof Error ? error.message : "";
+  return /database system is starting up|connection (?:refused|reset|terminated)|timed?\s*out/i.test(
+    message,
+  );
+}
+
+async function withDatabaseRetry<T>(
+  label: string,
+  operation: () => Promise<T>,
+  attempts = 4,
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= attempts || !isTransientDatabaseError(error)) throw error;
+      const delayMs = Math.min(4_000, 750 * 2 ** (attempt - 1));
+      console.warn(
+        `Transient PostgreSQL error during ${label}; retrying ${attempt}/${attempts - 1} in ${delayMs}ms.`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
 
 function rowToSubmission(row: SubmissionRow): TTMLSubmission {
   return {
@@ -166,6 +468,49 @@ function rowToSubmission(row: SubmissionRow): TTMLSubmission {
 
 function toIsoDate(value: Date | string | number) {
   return new Date(value).toISOString();
+}
+
+function rowToCommunityCover(row: CommunityCoverRow): CommunityCover {
+  return {
+    id: row.id,
+    song: row.song,
+    songKey: row.song_key,
+    width: Number(row.width),
+    height: Number(row.height),
+    byteLength: Number(row.byte_length),
+    sha256: row.sha256,
+    originalFileName: row.original_file_name,
+    discordAttachmentId: row.discord_attachment_id,
+    threadId: row.thread_id,
+    forumId: row.forum_id,
+    submitter: row.submitter,
+    moderator: row.moderator,
+    createdAt: toIsoDate(row.created_at),
+    updatedAt: toIsoDate(row.updated_at),
+  };
+}
+
+function rowToCommunityArtistMedia(
+  row: CommunityArtistMediaRow,
+): CommunityArtistMedia {
+  return {
+    id: row.id,
+    artist: row.artist,
+    artistKey: row.artist_key,
+    kind: row.asset_kind,
+    width: Number(row.width),
+    height: Number(row.height),
+    byteLength: Number(row.byte_length),
+    sha256: row.sha256,
+    originalFileName: row.original_file_name,
+    discordAttachmentId: row.discord_attachment_id,
+    threadId: row.thread_id,
+    forumId: row.forum_id,
+    submitter: row.submitter,
+    moderator: row.moderator,
+    createdAt: toIsoDate(row.created_at),
+    updatedAt: toIsoDate(row.updated_at),
+  };
 }
 
 function rowToMaintenanceEvent(row: MaintenanceEventRow): MaintenanceEvent {
@@ -333,6 +678,65 @@ export async function initializeSubmissionStore() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_covers (
+      song_key TEXT PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      song JSONB NOT NULL,
+      png_data BYTEA NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      byte_length INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      original_file_name TEXT NOT NULL,
+      discord_attachment_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      forum_id TEXT NOT NULL,
+      submitter JSONB NOT NULL,
+      moderator JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cover_contribution_approvals (
+      thread_id TEXT PRIMARY KEY,
+      cover_id TEXT NOT NULL,
+      song_key TEXT NOT NULL,
+      song JSONB NOT NULL,
+      discord_attachment_id TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      submitter JSONB NOT NULL,
+      moderator JSONB NOT NULL,
+      approved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_artist_media (
+      artist_key TEXT PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      artist JSONB NOT NULL,
+      normalized_artist_name TEXT NOT NULL,
+      asset_kind TEXT NOT NULL CHECK (asset_kind IN ('avatar', 'banner')),
+      png_data BYTEA NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      byte_length INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      original_file_name TEXT NOT NULL,
+      discord_attachment_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      forum_id TEXT NOT NULL,
+      submitter JSONB NOT NULL,
+      moderator JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (thread_id, asset_kind)
+    )
+  `);
+
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS ttml_submissions_status_idx
     ON ttml_submissions (status)
   `);
@@ -351,6 +755,36 @@ export async function initializeSubmissionStore() {
     CREATE INDEX IF NOT EXISTS maintenance_events_type_status_idx
     ON maintenance_events (type, status, starts_at_utc, ends_at_utc)
   `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS community_covers_updated_at_idx
+    ON community_covers (updated_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS community_artist_media_name_idx
+    ON community_artist_media (normalized_artist_name, asset_kind)
+  `);
+
+  const storedCovers = await pool.query<{
+    song_key: string;
+    song: SongPayload;
+  }>("SELECT song_key, song FROM community_covers");
+  for (const row of storedCovers.rows) {
+    const exactKey = createCommunityCoverKey(
+      row.song.artist,
+      row.song.title,
+    );
+    if (exactKey === row.song_key) continue;
+    await pool.query(
+      "UPDATE cover_contribution_approvals SET song_key = $1 WHERE song_key = $2",
+      [exactKey, row.song_key],
+    );
+    await pool.query(
+      "UPDATE community_covers SET song_key = $1 WHERE song_key = $2",
+      [exactKey, row.song_key],
+    );
+  }
 
   const missingKeys = await pool.query<{
     id: string;
@@ -1014,25 +1448,25 @@ export async function getApprovedSubmission(
   duration?: number,
 ) {
   const songKey = createSongKey(artist, title);
+  const request = { artist, title, duration };
 
   if (!pool) {
-    return [...memorySubmissions.values()]
+    const approved = [...memorySubmissions.values()]
       .filter(
-        (submission) =>
-          submission.status === "approved" &&
-          createSongKey(submission.song.artist, submission.song.title) ===
-            songKey,
+        (submission) => submission.status === "approved",
       )
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .find(
-        (submission) =>
-          !duration ||
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const exact = approved.find(
+      (submission) =>
+        createSongKey(submission.song.artist, submission.song.title) === songKey &&
+        (!duration ||
           !submission.song.duration ||
-          Math.abs(submission.song.duration - duration) <= 5,
-      );
+          Math.abs(submission.song.duration - duration) <= 5),
+    );
+    return exact ?? pickBestSongMatch(request, approved);
   }
 
-  const result = await pool.query<SubmissionRow>(
+  const exactResult = await pool.query<SubmissionRow>(
     `
       SELECT
         id,
@@ -1054,13 +1488,34 @@ export async function getApprovedSubmission(
     [songKey],
   );
 
-  const submissions = result.rows.map(rowToSubmission);
-  return submissions.find(
+  const exact = exactResult.rows.map(rowToSubmission).find(
     (submission) =>
       !duration ||
       !submission.song.duration ||
       Math.abs(submission.song.duration - duration) <= 5,
   );
+  if (exact) return exact;
+
+  const fallbackResult = await pool.query<SubmissionRow>(
+    `
+      SELECT
+        id,
+        song,
+        file_name,
+        ttml_content,
+        status,
+        created_at,
+        message_id,
+        channel_id,
+        submitter,
+        moderator
+      FROM ttml_submissions
+      WHERE status = 'approved'
+      ORDER BY updated_at DESC
+      LIMIT 250
+    `,
+  );
+  return pickBestSongMatch(request, fallbackResult.rows.map(rowToSubmission));
 }
 
 export async function createDiscordAuthRequest(state: string) {
@@ -1191,6 +1646,545 @@ export async function getDiscordSession(tokenHash: string) {
   );
 
   return result.rows[0]?.user_data;
+}
+
+function isExactSongMatch(song: SongPayload, artist: string, title: string) {
+  return (
+    normalizeCatalogValue(song.artist) === normalizeCatalogValue(artist) &&
+    normalizeCatalogValue(song.title) === normalizeCatalogValue(title)
+  );
+}
+
+export async function findCatalogSongsExact(artist: string, title: string) {
+  const songKey = createSongKey(artist, title);
+  const coverSongKey = createCommunityCoverKey(artist, title);
+  const songs: SongPayload[] = [];
+
+  if (!pool) {
+    const cover = memoryCommunityCovers.get(coverSongKey);
+    if (cover) songs.push(cover.song);
+    for (const submission of memorySubmissions.values()) {
+      if (submission.status === "approved") songs.push(submission.song);
+    }
+  } else {
+    const result = await withDatabaseRetry("cover catalog lookup", () =>
+      pool.query<{ song: SongPayload }>(
+        `
+          SELECT song
+          FROM community_covers
+          WHERE song_key = $1
+          UNION ALL
+          SELECT song
+          FROM ttml_submissions
+          WHERE song_key = $2 AND status = 'approved'
+        `,
+        [coverSongKey, songKey],
+      ),
+    );
+    songs.push(...result.rows.map((row) => row.song));
+  }
+
+  const unique = new Map<string, SongPayload>();
+  for (const song of songs) {
+    if (!isExactSongMatch(song, artist, title)) continue;
+    unique.set(song.id || createSongKey(song.artist, song.title), song);
+  }
+  return [...unique.values()];
+}
+
+export async function isCoverThreadApproved(threadId: string) {
+  if (!pool) return memoryApprovedCoverThreads.has(threadId);
+  const result = await withDatabaseRetry("cover approval lookup", () =>
+    pool.query(
+      "SELECT 1 FROM cover_contribution_approvals WHERE thread_id = $1 LIMIT 1",
+      [threadId],
+    ),
+  );
+  return result.rowCount !== 0;
+}
+
+export async function saveCommunityCover(input: {
+  id: string;
+  song: SongPayload;
+  pngData: Buffer;
+  width: number;
+  height: number;
+  sha256: string;
+  originalFileName: string;
+  discordAttachmentId: string;
+  threadId: string;
+  forumId: string;
+  submitter: DiscordIdentity;
+  moderator: DiscordIdentity;
+}) {
+  const songKey = createCommunityCoverKey(input.song.artist, input.song.title);
+
+  if (!pool) {
+    if (memoryApprovedCoverThreads.has(input.threadId)) {
+      throw new CommunityCoverAlreadyApprovedError();
+    }
+    const now = new Date().toISOString();
+    const previous = memoryCommunityCovers.get(songKey);
+    const cover: CommunityCover & { pngData: Buffer } = {
+      id: input.id,
+      song: input.song,
+      songKey,
+      pngData: input.pngData,
+      width: input.width,
+      height: input.height,
+      byteLength: input.pngData.byteLength,
+      sha256: input.sha256,
+      originalFileName: input.originalFileName,
+      discordAttachmentId: input.discordAttachmentId,
+      threadId: input.threadId,
+      forumId: input.forumId,
+      submitter: input.submitter,
+      moderator: input.moderator,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+    };
+    memoryApprovedCoverThreads.add(input.threadId);
+    memoryCommunityCovers.set(songKey, cover);
+    return cover;
+  }
+
+  return withDatabaseRetry("community cover save", async () => {
+    const connection = await pool.connect();
+    try {
+      await connection.query("BEGIN");
+      const approved = await connection.query(
+        "SELECT 1 FROM cover_contribution_approvals WHERE thread_id = $1 FOR UPDATE",
+        [input.threadId],
+      );
+      if (approved.rowCount) throw new CommunityCoverAlreadyApprovedError();
+
+      await connection.query(
+        `
+          INSERT INTO cover_contribution_approvals (
+            thread_id, cover_id, song_key, song, discord_attachment_id,
+            sha256, submitter, moderator
+          )
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::jsonb)
+        `,
+        [
+          input.threadId,
+          input.id,
+          songKey,
+          JSON.stringify(input.song),
+          input.discordAttachmentId,
+          input.sha256,
+          JSON.stringify(input.submitter),
+          JSON.stringify(input.moderator),
+        ],
+      );
+
+      const result = await connection.query<CommunityCoverRow>(
+        `
+          INSERT INTO community_covers (
+            song_key, id, song, png_data, width, height, byte_length, sha256,
+            original_file_name, discord_attachment_id, thread_id, forum_id,
+            submitter, moderator
+          )
+          VALUES (
+            $1, $2, $3::jsonb, $4, $5, $6, $7, $8,
+            $9, $10, $11, $12, $13::jsonb, $14::jsonb
+          )
+          ON CONFLICT (song_key) DO UPDATE SET
+            id = EXCLUDED.id,
+            song = EXCLUDED.song,
+            png_data = EXCLUDED.png_data,
+            width = EXCLUDED.width,
+            height = EXCLUDED.height,
+            byte_length = EXCLUDED.byte_length,
+            sha256 = EXCLUDED.sha256,
+            original_file_name = EXCLUDED.original_file_name,
+            discord_attachment_id = EXCLUDED.discord_attachment_id,
+            thread_id = EXCLUDED.thread_id,
+            forum_id = EXCLUDED.forum_id,
+            submitter = EXCLUDED.submitter,
+            moderator = EXCLUDED.moderator,
+            updated_at = NOW()
+          RETURNING *
+        `,
+        [
+          songKey,
+          input.id,
+          JSON.stringify(input.song),
+          input.pngData,
+          input.width,
+          input.height,
+          input.pngData.byteLength,
+          input.sha256,
+          input.originalFileName,
+          input.discordAttachmentId,
+          input.threadId,
+          input.forumId,
+          JSON.stringify(input.submitter),
+          JSON.stringify(input.moderator),
+        ],
+      );
+      await connection.query("COMMIT");
+      return rowToCommunityCover(result.rows[0]);
+    } catch (error) {
+      await connection.query("ROLLBACK").catch(() => {});
+      if (
+        error instanceof CommunityCoverAlreadyApprovedError ||
+        (typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "23505")
+      ) {
+        throw new CommunityCoverAlreadyApprovedError();
+      }
+      throw error;
+    } finally {
+      connection.release();
+    }
+  });
+}
+
+export async function getCommunityCover(artist: string, title: string) {
+  const songKey = createCommunityCoverKey(artist, title);
+  if (!pool) {
+    const cover =
+      memoryCommunityCovers.get(songKey) ??
+      pickBestSongMatch(
+        { artist, title },
+        [...memoryCommunityCovers.values()].map((candidate) => ({
+          ...candidate,
+          song: candidate.song,
+        })),
+      );
+    if (!cover) return undefined;
+    const { pngData: _pngData, ...metadata } = cover;
+    return { ...metadata, requestedSongKey: songKey };
+  }
+
+  const exactResult = await withDatabaseRetry("community cover lookup", () =>
+    pool.query<CommunityCoverRow>(
+      "SELECT * FROM community_covers WHERE song_key = $1",
+      [songKey],
+    ),
+  );
+  if (exactResult.rows[0]) {
+    return {
+      ...rowToCommunityCover(exactResult.rows[0]),
+      requestedSongKey: songKey,
+    };
+  }
+
+  const fallbackResult = await withDatabaseRetry(
+    "community cover flexible lookup",
+    () =>
+      pool.query<CommunityCoverRow>(`
+        SELECT
+          id, song, song_key, width, height, byte_length, sha256,
+          original_file_name, discord_attachment_id, thread_id, forum_id,
+          submitter, moderator, created_at, updated_at
+        FROM community_covers
+        ORDER BY updated_at DESC
+        LIMIT 500
+      `),
+  );
+  const matched = pickBestSongMatch(
+    { artist, title },
+    fallbackResult.rows.map(rowToCommunityCover),
+  );
+  return matched ? { ...matched, requestedSongKey: songKey } : undefined;
+}
+
+export async function getCommunityCoversBatch(
+  songs: Array<{ artist: string; title: string }>,
+) {
+  const requests = [
+    ...new Map(
+      songs.map((song) => [
+        createCommunityCoverKey(song.artist, song.title),
+        song,
+      ]),
+    ).entries(),
+  ];
+  const keys = requests.map(([key]) => key);
+  if (keys.length === 0) return [];
+
+  if (!pool) {
+    const allCovers = [...memoryCommunityCovers.values()];
+    return requests.flatMap(([requestedSongKey, song]) => {
+      const exact = memoryCommunityCovers.get(requestedSongKey);
+      const matched =
+        exact ??
+        pickBestSongMatch(
+          song,
+          allCovers.map((cover) => ({ ...cover, song: cover.song })),
+        );
+      if (!matched) return [];
+      const { pngData: _pngData, ...metadata } = matched;
+      return [{ ...metadata, requestedSongKey }];
+    });
+  }
+
+  const exactResult = await withDatabaseRetry("community cover batch lookup", () =>
+    pool.query<CommunityCoverRow>(
+      "SELECT * FROM community_covers WHERE song_key = ANY($1::text[])",
+      [keys],
+    ),
+  );
+  const exactByKey = new Map(
+    exactResult.rows.map((row) => [row.song_key, rowToCommunityCover(row)]),
+  );
+  const missing = requests.filter(([key]) => !exactByKey.has(key));
+  let fallbackCandidates: CommunityCover[] = [];
+  if (missing.length > 0) {
+    const fallbackResult = await withDatabaseRetry(
+      "community cover flexible batch lookup",
+      () =>
+        pool.query<CommunityCoverRow>(`
+          SELECT
+            id, song, song_key, width, height, byte_length, sha256,
+            original_file_name, discord_attachment_id, thread_id, forum_id,
+            submitter, moderator, created_at, updated_at
+          FROM community_covers
+          ORDER BY updated_at DESC
+          LIMIT 500
+        `),
+    );
+    fallbackCandidates = fallbackResult.rows.map(rowToCommunityCover);
+  }
+
+  return requests.flatMap(([requestedSongKey, song]) => {
+    const cover =
+      exactByKey.get(requestedSongKey) ??
+      pickBestSongMatch(
+        song,
+        fallbackCandidates.map((candidate) => ({
+          ...candidate,
+          song: candidate.song,
+        })),
+      );
+    return cover ? [{ ...cover, requestedSongKey }] : [];
+  });
+}
+
+export async function getCommunityCoverImage(songKey: string) {
+  if (!pool) {
+    const cover = memoryCommunityCovers.get(songKey);
+    return cover
+      ? { pngData: cover.pngData, sha256: cover.sha256, updatedAt: cover.updatedAt }
+      : undefined;
+  }
+
+  const result = await withDatabaseRetry("community cover image lookup", () =>
+    pool.query<{
+      png_data: Buffer;
+      sha256: string;
+      updated_at: Date | string;
+    }>(
+      "SELECT png_data, sha256, updated_at FROM community_covers WHERE song_key = $1",
+      [songKey],
+    ),
+  );
+  const row = result.rows[0];
+  return row
+    ? { pngData: row.png_data, sha256: row.sha256, updatedAt: toIsoDate(row.updated_at) }
+    : undefined;
+}
+
+export async function isArtistMediaThreadApproved(
+  threadId: string,
+  kind: ArtistMediaKind,
+) {
+  const approvalKey = `${threadId}:${kind}`;
+  if (!pool) return memoryApprovedArtistMediaThreads.has(approvalKey);
+  const result = await withDatabaseRetry("artist media approval lookup", () =>
+    pool.query(
+      `SELECT 1 FROM community_artist_media
+       WHERE thread_id = $1 AND asset_kind = $2 LIMIT 1`,
+      [threadId, kind],
+    ),
+  );
+  return result.rowCount !== 0;
+}
+
+export async function saveCommunityArtistMedia(input: {
+  id: string;
+  artist: ArtistReference;
+  kind: ArtistMediaKind;
+  pngData: Buffer;
+  width: number;
+  height: number;
+  sha256: string;
+  originalFileName: string;
+  discordAttachmentId: string;
+  threadId: string;
+  forumId: string;
+  submitter: DiscordIdentity;
+  moderator: DiscordIdentity;
+}) {
+  const artistKey = createCommunityArtistMediaKey(input.artist, input.kind);
+  const approvalKey = `${input.threadId}:${input.kind}`;
+  const normalizedArtistName = normalizeCommunityCoverPart(input.artist.name);
+
+  if (!pool) {
+    if (memoryApprovedArtistMediaThreads.has(approvalKey)) {
+      throw new CommunityArtistMediaAlreadyApprovedError();
+    }
+    const now = new Date().toISOString();
+    const previous = memoryCommunityArtistMedia.get(artistKey);
+    const media: CommunityArtistMedia & { pngData: Buffer } = {
+      id: input.id,
+      artist: input.artist,
+      artistKey,
+      kind: input.kind,
+      pngData: input.pngData,
+      width: input.width,
+      height: input.height,
+      byteLength: input.pngData.byteLength,
+      sha256: input.sha256,
+      originalFileName: input.originalFileName,
+      discordAttachmentId: input.discordAttachmentId,
+      threadId: input.threadId,
+      forumId: input.forumId,
+      submitter: input.submitter,
+      moderator: input.moderator,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+    };
+    memoryApprovedArtistMediaThreads.add(approvalKey);
+    memoryCommunityArtistMedia.set(artistKey, media);
+    return media;
+  }
+
+  return withDatabaseRetry("community artist media save", async () => {
+    const connection = await pool.connect();
+    try {
+      await connection.query("BEGIN");
+      const approved = await connection.query(
+        `SELECT 1 FROM community_artist_media
+         WHERE thread_id = $1 AND asset_kind = $2 FOR UPDATE`,
+        [input.threadId, input.kind],
+      );
+      if (approved.rowCount) {
+        throw new CommunityArtistMediaAlreadyApprovedError();
+      }
+
+      const result = await connection.query<CommunityArtistMediaRow>(
+        `
+          INSERT INTO community_artist_media (
+            artist_key, id, artist, normalized_artist_name, asset_kind,
+            png_data, width, height, byte_length, sha256,
+            original_file_name, discord_attachment_id, thread_id, forum_id,
+            submitter, moderator
+          )
+          VALUES (
+            $1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15::jsonb, $16::jsonb
+          )
+          ON CONFLICT (artist_key) DO UPDATE SET
+            id = EXCLUDED.id,
+            artist = EXCLUDED.artist,
+            normalized_artist_name = EXCLUDED.normalized_artist_name,
+            png_data = EXCLUDED.png_data,
+            width = EXCLUDED.width,
+            height = EXCLUDED.height,
+            byte_length = EXCLUDED.byte_length,
+            sha256 = EXCLUDED.sha256,
+            original_file_name = EXCLUDED.original_file_name,
+            discord_attachment_id = EXCLUDED.discord_attachment_id,
+            thread_id = EXCLUDED.thread_id,
+            forum_id = EXCLUDED.forum_id,
+            submitter = EXCLUDED.submitter,
+            moderator = EXCLUDED.moderator,
+            updated_at = NOW()
+          RETURNING *
+        `,
+        [
+          artistKey,
+          input.id,
+          JSON.stringify(input.artist),
+          normalizedArtistName,
+          input.kind,
+          input.pngData,
+          input.width,
+          input.height,
+          input.pngData.byteLength,
+          input.sha256,
+          input.originalFileName,
+          input.discordAttachmentId,
+          input.threadId,
+          input.forumId,
+          JSON.stringify(input.submitter),
+          JSON.stringify(input.moderator),
+        ],
+      );
+      await connection.query("COMMIT");
+      return rowToCommunityArtistMedia(result.rows[0]);
+    } catch (error) {
+      await connection.query("ROLLBACK").catch(() => {});
+      if (
+        error instanceof CommunityArtistMediaAlreadyApprovedError ||
+        (typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "23505")
+      ) {
+        throw new CommunityArtistMediaAlreadyApprovedError();
+      }
+      throw error;
+    } finally {
+      connection.release();
+    }
+  });
+}
+
+export async function getCommunityArtistMedia(
+  artistName: string,
+  kind: ArtistMediaKind,
+) {
+  const normalizedArtistName = normalizeCommunityCoverPart(artistName);
+  if (!pool) {
+    return [...memoryCommunityArtistMedia.values()]
+      .filter(
+        (media) =>
+          media.kind === kind &&
+          normalizeCommunityCoverPart(media.artist.name) === normalizedArtistName,
+      )
+      .map(({ pngData: _pngData, ...metadata }) => metadata);
+  }
+
+  const result = await withDatabaseRetry("community artist media lookup", () =>
+    pool.query<CommunityArtistMediaRow>(
+      `SELECT * FROM community_artist_media
+       WHERE normalized_artist_name = $1 AND asset_kind = $2
+       ORDER BY updated_at DESC`,
+      [normalizedArtistName, kind],
+    ),
+  );
+  return result.rows.map(rowToCommunityArtistMedia);
+}
+
+export async function getCommunityArtistMediaImage(artistKey: string) {
+  if (!pool) {
+    const media = memoryCommunityArtistMedia.get(artistKey);
+    return media
+      ? { pngData: media.pngData, sha256: media.sha256, updatedAt: media.updatedAt }
+      : undefined;
+  }
+
+  const result = await withDatabaseRetry("community artist media image lookup", () =>
+    pool.query<{
+      png_data: Buffer;
+      sha256: string;
+      updated_at: Date | string;
+    }>(
+      `SELECT png_data, sha256, updated_at
+       FROM community_artist_media WHERE artist_key = $1`,
+      [artistKey],
+    ),
+  );
+  const row = result.rows[0];
+  return row
+    ? { pngData: row.png_data, sha256: row.sha256, updatedAt: toIsoDate(row.updated_at) }
+    : undefined;
 }
 
 export function isDatabaseEnabled() {

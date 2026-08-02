@@ -1,8 +1,12 @@
 import "dotenv/config";
 import { createHash, randomBytes } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { extname, join } from "node:path";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
+import sharp from "sharp";
 import {
   ActionRowBuilder,
   AttachmentBuilder,
@@ -14,25 +18,66 @@ import {
   type ChatInputCommandInteraction,
   EmbedBuilder,
   GatewayIntentBits,
+  type Message,
   ModalBuilder,
   type ModalSubmitInteraction,
+  type NewsChannel,
+  Partials,
+  PermissionFlagsBits,
   REST,
   Routes,
+  StringSelectMenuBuilder,
+  type StringSelectMenuInteraction,
   type TextChannel,
+  type ThreadChannel,
   TextInputBuilder,
   TextInputStyle,
+  type User,
 } from "discord.js";
-import { buildCommandDefinitions } from "./slash-commands.js";
 import {
+  buildArtworkAnnouncementEmbed,
+  buildArtworkReportButtons,
+  buildArtworkReportEmbed,
+  buildCommunityAnnouncementsRoleEmbed,
+  isCommunityAnnouncementsReaction,
+  isSupportedArtworkChannelType,
+  parseArtworkReportCustomId,
+} from "./artwork-report-discord.js";
+import {
+  buildCommandDefinitions,
+  publicGlobalCommandNames,
+} from "./slash-commands.js";
+import {
+  greetingEmojiNames,
+  pickRandomGreeting,
+  pickRandomGreetingEmoji,
+} from "./greetings.js";
+import {
+  CoverContributionError,
+  createExplicitCoverSong,
+  DEFAULT_COVER_MAX_BYTES,
+  DEFAULT_COVER_MIN_DIMENSION,
+  isPngAttachment,
+  normalizeCatalogValue,
+  validatePngBuffer,
+} from "./cover-contributions.js";
+import {
+  CommunityArtistMediaAlreadyApprovedError,
+  CommunityCoverAlreadyApprovedError,
   closeSubmissionStore,
   completeDiscordAuthRequest,
-  countSubmissions,
   createDiscordAuthRequest,
   createMaintenanceEvent,
   deleteAllCommunityTtmlsWithBackup,
   deleteCommunityTtmlsWithBackup,
   endMaintenanceEvent,
   findCommunityTtmls,
+  findCatalogSongsExact,
+  getCommunityCover,
+  getCommunityCoverImage,
+  getCommunityCoversBatch,
+  getCommunityArtistMedia,
+  getCommunityArtistMediaImage,
   getMaintenanceSnapshot,
   getApprovedSubmission,
   getDiscordAuthRequest,
@@ -41,23 +86,80 @@ import {
   getSubmission,
   initializeSubmissionStore,
   isDatabaseEnabled,
+  isCoverThreadApproved,
+  isArtistMediaThreadApproved,
   saveSubmission,
+  saveCommunityCover,
+  saveCommunityArtistMedia,
   restoreLatestCommunityTtmlBackup,
   acknowledgeMaintenanceNotice,
   type DiscordIdentity,
+  type CommunityCover,
+  type CommunityArtistMedia,
+  type ArtistMediaKind,
+  type ArtistReference,
   type MaintenanceType,
   type SongPayload,
   type TTMLSubmission,
 } from "./submission-store.js";
+import {
+  ArtworkReportAlreadyReviewedError,
+  ArtworkReportDuplicateError,
+  ArtworkReportNotFoundError,
+  ArtworkReportPermissionError,
+  ArtworkReportRateLimitError,
+  ArtworkReportValidationError,
+  closeArtworkReportStore,
+  createArtworkReport,
+  getArtworkReport,
+  getArtworkReportStatus,
+  getSongArtworkMapping,
+  initializeArtworkReportStore,
+  listArtworkReports,
+  listArtworkReportsForDiscordRecovery,
+  lookupAppleTrack,
+  reviewArtworkReport,
+  setArtworkReportDiscordMessage,
+  setArtworkReportPublicMessage,
+  type ArtworkReport,
+  type ArtworkReportStatus,
+  type SongArtworkMapping,
+} from "./artwork-reports.js";
 
 const token = process.env.DISCORD_TOKEN;
 const reviewChannelId = process.env.DISCORD_REVIEW_CHANNEL_ID;
+const reportsChannelId = process.env.DISCORD_REPORTS_CHANNEL_ID;
+const publicCoversChannelId =
+  process.env.DISCORD_PUBLIC_COVERS_CHANNEL_ID;
+const communityAnnouncementsChannelId =
+  process.env.DISCORD_COMMUNITY_ANNOUNCEMENTS_CHANNEL_ID;
+const communityAnnouncementsRoleId =
+  process.env.DISCORD_COMMUNITY_ANNOUNCEMENTS_ROLE_ID;
+const communityAnnouncementsEmojiId =
+  process.env.DISCORD_COMMUNITY_ANNOUNCEMENTS_EMOJI_ID;
 const port = Number(process.env.PORT ?? 8787);
 const discordClientId = process.env.DISCORD_CLIENT_ID;
 const discordClientSecret = process.env.DISCORD_CLIENT_SECRET;
 const discordGuildId = process.env.DISCORD_GUILD_ID;
 const discordOwnerUserId = process.env.DISCORD_OWNER_USER_ID;
 const discordCreatorRoleId = process.env.DISCORD_CREATOR_ROLE_ID;
+const coverReviewerRoleId =
+  process.env.DISCORD_COVER_REVIEWER_ROLE_ID || "1528273148687159380";
+const coverCreatorRoleId =
+  process.env.DISCORD_COVER_CREATOR_ROLE_ID || "1518914345583771768";
+const coverForumId =
+  process.env.DISCORD_COVER_FORUM_ID || "1528281546807840778";
+const artistMediaForumId =
+  process.env.DISCORD_ARTIST_MEDIA_FORUM_ID || "1530744217893339316";
+const coverMinDimension = Math.max(
+  1,
+  Number(process.env.CLOUD_COVER_MIN_DIMENSION) ||
+    DEFAULT_COVER_MIN_DIMENSION,
+);
+const coverMaxBytes = Math.max(
+  1024,
+  Number(process.env.CLOUD_COVER_MAX_BYTES) || DEFAULT_COVER_MAX_BYTES,
+);
 const publicBaseUrl = (
   process.env.PUBLIC_BASE_URL ||
   (process.env.RAILWAY_PUBLIC_DOMAIN
@@ -68,6 +170,12 @@ const discordRedirectUri =
   process.env.DISCORD_REDIRECT_URI ||
   `${publicBaseUrl}/api/auth/discord/callback`;
 let slashCommandsRegistered = false;
+let backendBootstrapReady = false;
+let backendBootstrapError: string | null = null;
+let backendBootstrapTimer: NodeJS.Timeout | undefined;
+let backendBootstrapRunning = false;
+let previousGreetingIndex: number | undefined;
+let previousGreetingEmojiName: string | undefined;
 const configuredOrigins = (
   process.env.CLOUD_APP_ORIGINS ??
   process.env.CLOUD_APP_ORIGIN ??
@@ -111,8 +219,42 @@ if (!reviewChannelId) {
   throw new Error("Missing DISCORD_REVIEW_CHANNEL_ID in .env");
 }
 
+if (!reportsChannelId) {
+  throw new Error("Missing DISCORD_REPORTS_CHANNEL_ID in .env");
+}
+
+if (!publicCoversChannelId) {
+  throw new Error("Missing DISCORD_PUBLIC_COVERS_CHANNEL_ID in .env");
+}
+
+if (!communityAnnouncementsChannelId) {
+  throw new Error(
+    "Missing DISCORD_COMMUNITY_ANNOUNCEMENTS_CHANNEL_ID in .env",
+  );
+}
+
+if (!communityAnnouncementsRoleId) {
+  throw new Error(
+    "Missing DISCORD_COMMUNITY_ANNOUNCEMENTS_ROLE_ID in .env",
+  );
+}
+
+if (!communityAnnouncementsEmojiId) {
+  throw new Error(
+    "Missing DISCORD_COMMUNITY_ANNOUNCEMENTS_EMOJI_ID in .env",
+  );
+}
+
 const discordToken = token;
 const discordReviewChannelId = reviewChannelId;
+const discordReportsChannelId = reportsChannelId;
+const discordPublicCoversChannelId = publicCoversChannelId;
+const discordCommunityAnnouncementsChannelId =
+  communityAnnouncementsChannelId;
+const discordCommunityAnnouncementsRoleId =
+  communityAnnouncementsRoleId;
+const discordCommunityAnnouncementsEmojiId =
+  communityAnnouncementsEmojiId;
 const interactionNamespace = (
   process.env.DISCORD_INTERACTION_NAMESPACE ??
   process.env.RAILWAY_SERVICE_ID ??
@@ -124,7 +266,17 @@ const interactionNamespace = (
 const interactionPrefix = `railwayreview:${interactionNamespace}:`;
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
+  ],
+  partials: [
+    Partials.Channel,
+    Partials.Message,
+    Partials.Reaction,
+    Partials.User,
+  ],
 });
 
 const pendingDeleteConfirmations = new Map<
@@ -140,6 +292,25 @@ const pendingSpecificDeleteConfirmations = new Map<
     actor: DiscordIdentity;
     artist: string;
     title: string;
+    expiresAt: number;
+  }
+>();
+const pendingCoverSelections = new Map<
+  string,
+  {
+    moderatorId: string;
+    threadId: string;
+    songs: SongPayload[];
+    expiresAt: number;
+  }
+>();
+const pendingArtistMediaSelections = new Map<
+  string,
+  {
+    moderatorId: string;
+    threadId: string;
+    kind: ArtistMediaKind;
+    artists: ArtistReference[];
     expiresAt: number;
   }
 >();
@@ -181,6 +352,22 @@ async function getAuthenticatedDiscordUser(
   const sessionToken = getBearerToken(authorization);
   if (!sessionToken) return undefined;
   return getDiscordSession(hashSessionToken(sessionToken));
+}
+
+async function canModerateArtwork(userId: string) {
+  if (discordOwnerUserId && userId === discordOwnerUserId) return true;
+  if (!client.isReady()) return false;
+  const guild =
+    (discordGuildId
+      ? client.guilds.cache.get(discordGuildId)
+      : undefined) ?? client.guilds.cache.first();
+  if (!guild) return false;
+  const member = await guild.members.fetch(userId).catch(() => null);
+  if (!member) return false;
+  return (
+    member.roles.cache.has(coverReviewerRoleId) ||
+    member.roles.cache.has(coverCreatorRoleId)
+  );
 }
 
 function getDiscordAvatarUrl(user: {
@@ -310,7 +497,11 @@ function createDeleteConfirmationId() {
 }
 
 function discordIdentityFromInteraction(
-  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  interaction:
+    | ChatInputCommandInteraction
+    | ButtonInteraction
+    | ModalSubmitInteraction
+    | StringSelectMenuInteraction,
 ): DiscordIdentity {
   return {
     id: interaction.user.id,
@@ -323,8 +514,21 @@ function discordIdentityFromInteraction(
   };
 }
 
+function discordIdentityFromUser(user: User): DiscordIdentity {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.globalName ?? user.username,
+    avatarUrl: getDiscordAvatarUrl({ id: user.id, avatar: user.avatar }),
+  };
+}
+
 function interactionRoleIds(
-  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  interaction:
+    | ChatInputCommandInteraction
+    | ButtonInteraction
+    | ModalSubmitInteraction
+    | StringSelectMenuInteraction,
 ) {
   const roles = interaction.member?.roles;
   if (!roles) return [];
@@ -345,6 +549,43 @@ function canManageMaintenance(
   }
 
   return false;
+}
+
+function canManageCover(
+  interaction:
+    | ChatInputCommandInteraction
+    | StringSelectMenuInteraction,
+) {
+  const roles = interactionRoleIds(interaction);
+  return (
+    roles.includes(coverReviewerRoleId) || roles.includes(coverCreatorRoleId)
+  );
+}
+
+async function getContributionThread(
+  interaction:
+    | ChatInputCommandInteraction
+    | StringSelectMenuInteraction,
+) {
+  const channel =
+    interaction.channel ??
+    (await client.channels.fetch(interaction.channelId).catch(() => null));
+  if (!channel?.isThread() || channel.parentId !== coverForumId) return undefined;
+  return channel as ThreadChannel;
+}
+
+async function getArtistMediaContributionThread(
+  interaction:
+    | ChatInputCommandInteraction
+    | StringSelectMenuInteraction,
+) {
+  const channel =
+    interaction.channel ??
+    (await client.channels.fetch(interaction.channelId).catch(() => null));
+  if (!channel?.isThread() || channel.parentId !== artistMediaForumId) {
+    return undefined;
+  }
+  return channel as ThreadChannel;
 }
 
 function formatMaintenanceEvent(event: {
@@ -404,8 +645,18 @@ function parseMaintenanceTiming(interaction: ChatInputCommandInteraction) {
 async function registerSlashCommands() {
   if (slashCommandsRegistered) return;
 
+  const resolvedGuildId =
+    discordGuildId ||
+    (client.isReady()
+      ? client.guilds.cache.find(
+          (guild) =>
+            guild.channels.cache.has(coverForumId) ||
+            guild.channels.cache.has(artistMediaForumId),
+        )?.id
+      : undefined);
+
   console.log(
-    `Cloud slash command bootstrap: clientId=${discordClientId ? "yes" : "no"} guildId=${discordGuildId || "global"}`,
+    `Cloud slash command bootstrap: clientId=${discordClientId ? "yes" : "no"} guildId=${resolvedGuildId || (client.isReady() ? "global" : "pending-ready")}`,
   );
 
   if (!discordClientId) {
@@ -414,28 +665,89 @@ async function registerSlashCommands() {
   }
 
   const rest = new REST({ version: "10" }).setToken(discordToken);
-  const body = buildCommandDefinitions();
+  // Song cover uploads were retired. Artist avatar/banner contributions remain.
+  const definitions = buildCommandDefinitions().filter(
+    (command) => command.name !== "cover",
+  );
+  const publicGlobalCommands = definitions.filter((command) =>
+    publicGlobalCommandNames.has(command.name),
+  );
+  const serverCommands = definitions.filter(
+    (command) => !publicGlobalCommandNames.has(command.name),
+  );
   console.log(
-    `Cloud slash commands registering: ${body
+    `Cloud slash commands registering: ${definitions
       .map((command) => command.name)
       .join(", ")}`,
   );
-  if (discordGuildId) {
-    await rest.put(
-      Routes.applicationGuildCommands(discordClientId, discordGuildId),
-      { body },
+  if (!resolvedGuildId && !client.isReady()) {
+    console.log(
+      "Slash command registration deferred until Discord is ready so the contribution forum guild can be detected.",
+    );
+    return;
+  }
+
+  if (resolvedGuildId) {
+    await rest.put(Routes.applicationCommands(discordClientId), {
+      body: publicGlobalCommands,
+    });
+    const registeredCommands = (await rest.put(
+      Routes.applicationGuildCommands(discordClientId, resolvedGuildId),
+      { body: serverCommands },
+    )) as Array<{ id: string; name: string }>;
+    for (const commandName of ["app", "abp"]) {
+      const restrictedCommand = registeredCommands.find(
+        (command) => command.name === commandName,
+      );
+      if (!restrictedCommand) {
+        throw new Error(
+          `Discord did not return the /${commandName} command registration.`,
+        );
+      }
+      await rest
+        .put(
+          Routes.applicationCommandPermissions(
+            discordClientId,
+            resolvedGuildId,
+            restrictedCommand.id,
+          ),
+          {
+            body: {
+              permissions: [
+                { id: coverReviewerRoleId, type: 1, permission: true },
+                { id: coverCreatorRoleId, type: 1, permission: true },
+              ],
+            },
+          },
+        )
+        .catch((error) => {
+          // Discord may reject role permission updates made with a bot token.
+          // The handlers still enforce the exact role IDs and forum at runtime,
+          // so command registration must not be rolled back or left invisible.
+          console.warn(
+            `Could not restrict /${commandName} visibility by role; runtime permissions remain active:`,
+            error,
+          );
+        });
+    }
+    console.log(
+      `Cloud public global slash commands registered: ${publicGlobalCommands
+        .map((command) => command.name)
+        .join(", ")}`,
     );
     console.log(
-      `Cloud slash commands registered for guild ${discordGuildId}: ${body
+      `Cloud slash commands registered for guild ${resolvedGuildId}: ${serverCommands
         .map((command) => command.name)
         .join(", ")}`,
     );
   } else {
-    await rest.put(Routes.applicationCommands(discordClientId), { body });
+    await rest.put(Routes.applicationCommands(discordClientId), {
+      body: definitions,
+    });
     console.log(
-      `Cloud slash commands registered globally: ${body
+      `Cloud slash commands registered globally: ${definitions
         .map((command) => command.name)
-        .join(", ")}`,
+        .join(", ")}. Runtime role and forum checks remain active for /app and /abp.`,
     );
   }
 
@@ -470,6 +782,824 @@ function parseSongPayload(raw: unknown): SongPayload {
     audioUrl: parsed.audioUrl,
     submittedAt: parsed.submittedAt,
   };
+}
+
+type CoverAttachmentCandidate = {
+  id: string;
+  url: string;
+  name: string;
+  contentType?: string | null;
+  size: number;
+  message: Message;
+};
+
+type ItunesSongResult = {
+  trackId?: number;
+  collectionId?: number;
+  trackName?: string;
+  artistName?: string;
+  collectionName?: string;
+  trackTimeMillis?: number;
+  artworkUrl100?: string;
+  trackViewUrl?: string;
+  releaseDate?: string;
+  trackExplicitness?: string;
+  isrc?: string;
+  previewUrl?: string;
+  kind?: string;
+  wrapperType?: string;
+};
+
+const itunesCatalogCache = new Map<
+  string,
+  { expiresAt: number; songs: SongPayload[] }
+>();
+const appleArtworkCache = new Map<
+  string,
+  { expiresAt: number; results: ItunesSongResult[] }
+>();
+
+async function searchAppleArtworkCatalog(title: string, artist: string) {
+  const cacheKey = normalizeCatalogValue(`${title}\u0000${artist}`);
+  const cached = appleArtworkCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.results;
+
+  const url = new URL("https://itunes.apple.com/search");
+  url.searchParams.set("term", `${title} ${artist}`.trim());
+  url.searchParams.set("country", "MX");
+  url.searchParams.set("media", "music");
+  url.searchParams.set("entity", "song");
+  url.searchParams.set("limit", "10");
+  url.searchParams.set("explicit", "Yes");
+
+  const request = () =>
+    fetch(url, {
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Cloud/2.5.9 AppleArtworkCatalog",
+      },
+    });
+  let response = await request();
+  if (response.status === 429) {
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    response = await request();
+  }
+  if (!response.ok) {
+    throw new Error(`itunes_artwork_http_${response.status}`);
+  }
+
+  const payload = (await response.json()) as {
+    results?: ItunesSongResult[];
+  };
+  const results = (payload.results ?? [])
+    .filter(
+      (item) =>
+        typeof item.trackId === "number" &&
+        typeof item.trackName === "string" &&
+        typeof item.artistName === "string" &&
+        typeof item.collectionName === "string" &&
+        typeof item.artworkUrl100 === "string" &&
+        typeof item.trackViewUrl === "string" &&
+        (item.kind === undefined || item.kind === "song"),
+    )
+    .slice(0, 10);
+
+  appleArtworkCache.set(cacheKey, {
+    expiresAt: Date.now() + 30 * 60 * 1000,
+    results,
+  });
+  return results;
+}
+
+function dedupeCatalogSongs(songs: SongPayload[]) {
+  const unique: SongPayload[] = [];
+  for (const song of songs) {
+    const duplicate = unique.find(
+      (candidate) =>
+        normalizeCatalogValue(candidate.artist) ===
+          normalizeCatalogValue(song.artist) &&
+        normalizeCatalogValue(candidate.title) ===
+          normalizeCatalogValue(song.title) &&
+        (!candidate.album ||
+          !song.album ||
+          normalizeCatalogValue(candidate.album) ===
+            normalizeCatalogValue(song.album)) &&
+        (!candidate.duration ||
+          !song.duration ||
+          Math.abs(candidate.duration - song.duration) <= 5),
+    );
+    if (!duplicate) unique.push(song);
+  }
+  return unique;
+}
+
+async function searchItunesCatalog(query: string) {
+  const normalizedQuery = normalizeCatalogValue(query);
+  const cached = itunesCatalogCache.get(normalizedQuery);
+  if (cached && cached.expiresAt > Date.now()) return cached.songs;
+
+  const url = new URL("https://itunes.apple.com/search");
+  url.searchParams.set("term", query);
+  url.searchParams.set("entity", "song");
+  url.searchParams.set("media", "music");
+  url.searchParams.set("limit", "25");
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as { results?: ItunesSongResult[] };
+  const songs = (data.results ?? [])
+    .filter(
+      (item) =>
+        typeof item.trackName === "string" &&
+        typeof item.artistName === "string" &&
+        (item.kind === undefined || item.kind === "song"),
+    )
+    .map<SongPayload>((item) => ({
+      id: `itunes:${item.trackId ?? `${item.artistName}:${item.trackName}`}`,
+      title: item.trackName!,
+      artist: item.artistName!,
+      album: item.collectionName,
+      duration: item.trackTimeMillis
+        ? Math.round(item.trackTimeMillis / 1000)
+        : undefined,
+      coverUrl: item.artworkUrl100?.replace("100x100bb", "1200x1200bb"),
+      audioUrl: item.previewUrl,
+    }));
+  itunesCatalogCache.set(normalizedQuery, {
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    songs,
+  });
+  return songs;
+}
+
+type ItunesArtistResult = {
+  artistId?: number;
+  artistName?: string;
+  artistLinkUrl?: string;
+  primaryGenreName?: string;
+  wrapperType?: string;
+  artistType?: string;
+};
+
+const itunesArtistCache = new Map<
+  string,
+  { expiresAt: number; artists: ArtistReference[] }
+>();
+
+async function searchArtistProfiles(query: string) {
+  const normalizedQuery = normalizeCatalogValue(query);
+  const cached = itunesArtistCache.get(normalizedQuery);
+  if (cached && cached.expiresAt > Date.now()) return cached.artists;
+
+  const url = new URL("https://itunes.apple.com/search");
+  url.searchParams.set("term", query);
+  url.searchParams.set("entity", "musicArtist");
+  url.searchParams.set("attribute", "artistTerm");
+  url.searchParams.set("limit", "25");
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as { results?: ItunesArtistResult[] };
+  const unique = new Map<string, ArtistReference>();
+  for (const item of data.results ?? []) {
+    if (!item.artistId || !item.artistName) continue;
+    const artist: ArtistReference = {
+      id: `itunes:${item.artistId}`,
+      name: item.artistName,
+      referenceUrl:
+        item.artistLinkUrl ||
+        `https://music.apple.com/search?term=${encodeURIComponent(item.artistName)}`,
+      provider: "Apple Music",
+      genre: item.primaryGenreName,
+    };
+    unique.set(artist.id, artist);
+  }
+
+  const artists = [...unique.values()].sort((left, right) => {
+    const leftExact = normalizeCatalogValue(left.name) === normalizedQuery ? 0 : 1;
+    const rightExact = normalizeCatalogValue(right.name) === normalizedQuery ? 0 : 1;
+    return leftExact - rightExact || left.name.localeCompare(right.name);
+  });
+  itunesArtistCache.set(normalizedQuery, {
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    artists,
+  });
+  return artists;
+}
+
+async function findExactCatalogSongs(artist: string, title: string) {
+  const databaseMatches = await findCatalogSongsExact(artist, title);
+  const internetMatches = (await searchItunesCatalog(`${title} ${artist}`)).filter(
+    (song) =>
+      normalizeCatalogValue(song.artist) === normalizeCatalogValue(artist) &&
+      normalizeCatalogValue(song.title) === normalizeCatalogValue(title),
+  );
+  return dedupeCatalogSongs([...databaseMatches, ...internetMatches]);
+}
+
+function isImageAttachment(candidate: {
+  name?: string | null;
+  contentType?: string | null;
+}) {
+  return (
+    candidate.contentType?.toLocaleLowerCase().startsWith("image/") === true ||
+    /\.(?:png|jpe?g|webp|gif|avif)$/i.test(candidate.name ?? "")
+  );
+}
+
+async function findLatestCoverAttachment(thread: ThreadChannel) {
+  const starterMessage = await thread.fetchStarterMessage().catch(() => null);
+  const originalAuthorId = thread.ownerId ?? starterMessage?.author.id;
+  const candidates: CoverAttachmentCandidate[] = [];
+  let before: string | undefined;
+
+  for (let page = 0; page < 5; page += 1) {
+    const messages = await thread.messages.fetch({
+      limit: 100,
+      ...(before ? { before } : {}),
+    });
+    if (messages.size === 0) break;
+
+    for (const message of messages.values()) {
+      for (const attachment of message.attachments.values()) {
+        if (!isImageAttachment(attachment)) continue;
+        candidates.push({
+          id: attachment.id,
+          url: attachment.url,
+          name: attachment.name || `${attachment.id}.png`,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          message,
+        });
+      }
+    }
+
+    const oldest = [...messages.values()].sort(
+      (left, right) => left.createdTimestamp - right.createdTimestamp,
+    )[0];
+    before = oldest?.id;
+    if (messages.size < 100 || !before) break;
+  }
+
+  candidates.sort(
+    (left, right) => right.message.createdTimestamp - left.message.createdTimestamp,
+  );
+  return (
+    candidates.find(
+      (candidate) => candidate.message.author.id === originalAuthorId,
+    ) ?? candidates[0]
+  );
+}
+
+async function downloadAndValidateCover(attachment: CoverAttachmentCandidate) {
+  if (!isPngAttachment(attachment)) {
+    throw new CoverContributionError(
+      "INVALID_IMAGE_TYPE",
+      "La imagen mas reciente no es PNG. Adjunta un archivo .png y vuelve a intentarlo.",
+    );
+  }
+  if (attachment.size > coverMaxBytes) {
+    throw new CoverContributionError(
+      "IMAGE_TOO_LARGE",
+      `La imagen supera el limite de ${Math.floor(coverMaxBytes / 1024 / 1024)} MB.`,
+    );
+  }
+
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "cloud-cover-"));
+  const temporaryPath = join(temporaryDirectory, "cover.png");
+  try {
+    const response = await fetch(attachment.url, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      throw new CoverContributionError(
+        "CLOUD_REJECTED",
+        "Discord no permitio descargar la imagen. No se actualizo ninguna portada.",
+      );
+    }
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > coverMaxBytes) {
+      throw new CoverContributionError(
+        "IMAGE_TOO_LARGE",
+        `La imagen supera el limite de ${Math.floor(coverMaxBytes / 1024 / 1024)} MB.`,
+      );
+    }
+
+    const downloaded = Buffer.from(await response.arrayBuffer());
+    await writeFile(temporaryPath, downloaded);
+    const pngData = await readFile(temporaryPath);
+    const dimensions = validatePngBuffer(pngData, {
+      minDimension: coverMinDimension,
+      maxBytes: coverMaxBytes,
+    });
+    return {
+      pngData,
+      ...dimensions,
+      sha256: createHash("sha256").update(pngData).digest("hex"),
+    };
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function processCoverUpload(
+  interaction: ChatInputCommandInteraction | StringSelectMenuInteraction,
+  thread: ThreadChannel,
+  song: SongPayload,
+) {
+  if (await isCoverThreadApproved(thread.id)) {
+    throw new CommunityCoverAlreadyApprovedError();
+  }
+
+  const attachment = await findLatestCoverAttachment(thread);
+  if (!attachment) {
+    throw new CoverContributionError(
+      "NO_IMAGE",
+      "No se encontro ninguna imagen adjunta dentro del hilo.",
+    );
+  }
+
+  const validated = await downloadAndValidateCover(attachment);
+  const moderator = discordIdentityFromInteraction(interaction);
+  const starterMessage = await thread.fetchStarterMessage().catch(() => null);
+  const submitter = discordIdentityFromUser(
+    starterMessage?.author ?? attachment.message.author,
+  );
+  const cover = await saveCommunityCover({
+    id: `cover_${Date.now()}_${randomBytes(4).toString("hex")}`,
+    song,
+    pngData: validated.pngData,
+    width: validated.width,
+    height: validated.height,
+    sha256: validated.sha256,
+    originalFileName: attachment.name,
+    discordAttachmentId: attachment.id,
+    threadId: thread.id,
+    forumId: coverForumId,
+    submitter,
+    moderator,
+  });
+
+  await interaction.editReply({
+    content: `Portada aprobada: **${song.title}** de **${song.artist}** (${cover.width}x${cover.height}).`,
+    components: [],
+  });
+  await thread
+    .send(
+      `<@${submitter.id}>, tu portada fue aceptada por <@${moderator.id}>, quien subio la portada a Cloud.`,
+    )
+    .catch((error) => {
+      console.error("Cover saved but confirmation message failed:", error);
+    });
+}
+
+async function promptCoverSelection(
+  interaction: ChatInputCommandInteraction,
+  thread: ThreadChannel,
+  songs: SongPayload[],
+  exact: boolean,
+) {
+  const token = randomBytes(8).toString("hex");
+  pendingCoverSelections.set(token, {
+    moderatorId: interaction.user.id,
+    threadId: thread.id,
+    songs: songs.slice(0, 25),
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`${interactionPrefix}cover-select:${token}`)
+    .setPlaceholder("Selecciona la cancion correcta")
+    .addOptions(
+      songs.slice(0, 25).map((song, index) => ({
+        label: song.title.slice(0, 100),
+        description: `${song.artist}${song.album ? ` - ${song.album}` : ""}`.slice(
+          0,
+          100,
+        ),
+        value: String(index),
+      })),
+    );
+
+  await interaction.editReply({
+    content: exact
+      ? "Hay varias canciones coincidentes. Selecciona la correcta; no se actualizo ninguna portada."
+      : "No hubo una coincidencia exacta. Selecciona la cancion correcta o corrige artista y cancion en el comando; no se actualizo ninguna portada.",
+    components: [
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu),
+    ],
+  });
+}
+
+async function sendCoverError(
+  interaction: ChatInputCommandInteraction | StringSelectMenuInteraction,
+  error: unknown,
+) {
+  let content: string;
+  if (error instanceof CommunityCoverAlreadyApprovedError) {
+    content = "Esta contribucion ya fue aprobada. No se actualizo ninguna portada.";
+  } else if (error instanceof CoverContributionError) {
+    content = error.message;
+  } else {
+    console.error("Cover contribution failed:", error);
+    content =
+      "El servidor de Cloud rechazo la subida. No se actualizo ninguna portada.";
+  }
+
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ content, components: [] });
+  } else {
+    await interaction.reply({ content, ephemeral: true });
+  }
+}
+
+async function handleCoverUploadCommand(
+  interaction: ChatInputCommandInteraction,
+) {
+  if (!canManageCover(interaction)) {
+    await interaction.reply({
+      content: "No tienes permisos para aprobar portadas.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const thread = await getContributionThread(interaction);
+  if (!thread) {
+    await interaction.reply({
+      content:
+        "Este comando solo funciona dentro de un hilo del foro de contribuciones.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    if (await isCoverThreadApproved(thread.id)) {
+      throw new CommunityCoverAlreadyApprovedError();
+    }
+    const artist = interaction.options.getString("artista", true).trim();
+    const title = interaction.options.getString("cancion", true).trim();
+    const exactMatches = await findExactCatalogSongs(artist, title);
+    if (exactMatches.length === 1) {
+      await processCoverUpload(interaction, thread, exactMatches[0]);
+      return;
+    }
+    if (exactMatches.length > 1) {
+      await promptCoverSelection(
+        interaction,
+        thread,
+        exactMatches,
+        true,
+      );
+      return;
+    }
+
+    await processCoverUpload(
+      interaction,
+      thread,
+      createExplicitCoverSong(artist, title),
+    );
+  } catch (error) {
+    await sendCoverError(interaction, error);
+  }
+}
+
+async function handleCoverSelection(
+  interaction: StringSelectMenuInteraction,
+) {
+  const token = interaction.customId.split(":").at(-1) ?? "";
+  const pending = pendingCoverSelections.get(token);
+  if (
+    !pending ||
+    pending.expiresAt <= Date.now() ||
+    pending.moderatorId !== interaction.user.id
+  ) {
+    pendingCoverSelections.delete(token);
+    await interaction.reply({
+      content: "La seleccion vencio o pertenece a otro moderador.",
+      ephemeral: true,
+    });
+    return;
+  }
+  if (!canManageCover(interaction)) {
+    await interaction.reply({
+      content: "No tienes permisos para aprobar portadas.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const thread = await getContributionThread(interaction);
+  if (!thread || thread.id !== pending.threadId) {
+    await interaction.reply({
+      content: "La seleccion solo funciona en el hilo original.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const selectedIndex = Number(interaction.values[0]);
+  const song = pending.songs[selectedIndex];
+  if (!song) {
+    await interaction.reply({
+      content: "La cancion seleccionada ya no esta disponible.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  pendingCoverSelections.delete(token);
+  await interaction.deferUpdate();
+  try {
+    await processCoverUpload(interaction, thread, song);
+  } catch (error) {
+    await sendCoverError(interaction, error);
+  }
+}
+
+async function downloadAndValidateArtistMedia(
+  attachment: CoverAttachmentCandidate,
+  kind: ArtistMediaKind,
+) {
+  if (extname(attachment.name).toLocaleLowerCase() === ".jpeg") {
+    throw new CoverContributionError(
+      "INVALID_IMAGE_TYPE",
+      "El formato .jpeg no esta permitido. Usa PNG, JPG, WebP u otro formato de imagen compatible.",
+    );
+  }
+  if (attachment.size > coverMaxBytes) {
+    throw new CoverContributionError(
+      "IMAGE_TOO_LARGE",
+      `La imagen supera el limite de ${Math.floor(coverMaxBytes / 1024 / 1024)} MB.`,
+    );
+  }
+
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "cloud-artist-media-"));
+  const temporaryPath = join(temporaryDirectory, `${kind}-source`);
+  try {
+    const response = await fetch(attachment.url, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      throw new CoverContributionError(
+        "CLOUD_REJECTED",
+        "Discord no permitio descargar la imagen. No se actualizo el perfil del artista.",
+      );
+    }
+    const downloaded = Buffer.from(await response.arrayBuffer());
+    await writeFile(temporaryPath, downloaded);
+    const converted = await sharp(await readFile(temporaryPath), {
+      animated: false,
+    })
+      .rotate()
+      .png()
+      .toBuffer({ resolveWithObject: true });
+    const pngData = converted.data;
+    const dimensions = {
+      width: converted.info.width,
+      height: converted.info.height,
+    };
+
+    if (kind === "avatar") {
+      const ratio = dimensions.width / dimensions.height;
+      if (
+        dimensions.width < 200 ||
+        dimensions.height < 200 ||
+        ratio < 0.75 ||
+        ratio > 1.33
+      ) {
+        throw new CoverContributionError(
+          "LOW_RESOLUTION",
+          `La foto de artista debe ser casi cuadrada y de al menos 200x200 (300x300 recomendado). Imagen recibida: ${dimensions.width}x${dimensions.height}.`,
+        );
+      }
+    } else if (
+      dimensions.width < 1000 ||
+      dimensions.height < 400 ||
+      dimensions.width / dimensions.height < 1.6
+    ) {
+      throw new CoverContributionError(
+        "LOW_RESOLUTION",
+        `El banner debe ser horizontal y de al menos 1000x400 (2660x1140 recomendado). Imagen recibida: ${dimensions.width}x${dimensions.height}.`,
+      );
+    }
+
+    return {
+      pngData,
+      ...dimensions,
+      sha256: createHash("sha256").update(pngData).digest("hex"),
+    };
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function processArtistMediaUpload(
+  interaction: ChatInputCommandInteraction | StringSelectMenuInteraction,
+  thread: ThreadChannel,
+  artist: ArtistReference,
+  kind: ArtistMediaKind,
+) {
+  if (await isArtistMediaThreadApproved(thread.id, kind)) {
+    throw new CommunityArtistMediaAlreadyApprovedError();
+  }
+  const attachment = await findLatestCoverAttachment(thread);
+  if (!attachment) {
+    throw new CoverContributionError(
+      "NO_IMAGE",
+      "No se encontro ninguna imagen adjunta dentro del hilo.",
+    );
+  }
+  const validated = await downloadAndValidateArtistMedia(attachment, kind);
+  const moderator = discordIdentityFromInteraction(interaction);
+  const starterMessage = await thread.fetchStarterMessage().catch(() => null);
+  const submitter = discordIdentityFromUser(
+    starterMessage?.author ?? attachment.message.author,
+  );
+  const media = await saveCommunityArtistMedia({
+    id: `artist_${kind}_${Date.now()}_${randomBytes(4).toString("hex")}`,
+    artist,
+    kind,
+    pngData: validated.pngData,
+    width: validated.width,
+    height: validated.height,
+    sha256: validated.sha256,
+    originalFileName: attachment.name,
+    discordAttachmentId: attachment.id,
+    threadId: thread.id,
+    forumId: artistMediaForumId,
+    submitter,
+    moderator,
+  });
+  const assetLabel = kind === "avatar" ? "Foto de artista" : "Banner";
+  await interaction.editReply({
+    content: `${assetLabel} aprobado para **${artist.name}** (${media.width}x${media.height}). Referencia: ${artist.referenceUrl}`,
+    components: [],
+  });
+  await thread
+    .send(
+      `<@${submitter.id}>, tu ${assetLabel.toLocaleLowerCase("es")} de **${artist.name}** fue aceptado por <@${moderator.id}> y subido a Cloud.`,
+    )
+    .catch((error) => {
+      console.error("Artist media saved but confirmation message failed:", error);
+    });
+}
+
+async function promptArtistMediaSelection(
+  interaction: ChatInputCommandInteraction,
+  thread: ThreadChannel,
+  kind: ArtistMediaKind,
+  artists: ArtistReference[],
+) {
+  const token = randomBytes(8).toString("hex");
+  const availableArtists = artists.slice(0, 25);
+  pendingArtistMediaSelections.set(token, {
+    moderatorId: interaction.user.id,
+    threadId: thread.id,
+    kind,
+    artists: availableArtists,
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`${interactionPrefix}artist-media-select:${token}`)
+    .setPlaceholder("Selecciona el perfil exacto del artista")
+    .addOptions(
+      availableArtists.map((artist, index) => ({
+        label: artist.name.slice(0, 100),
+        description: `${artist.provider}${artist.genre ? ` - ${artist.genre}` : ""}`.slice(0, 100),
+        value: String(index),
+      })),
+    );
+  const references = availableArtists
+    .slice(0, 10)
+    .map(
+      (artist, index) =>
+        `${index + 1}. [${artist.name}${artist.genre ? ` - ${artist.genre}` : ""}](${artist.referenceUrl})`,
+    )
+    .join("\n");
+  await interaction.editReply({
+    content: [
+      "Selecciona el perfil exacto. No se subira ninguna imagen hasta confirmar.",
+      "Referencias externas:",
+      references,
+    ].join("\n"),
+    components: [
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu),
+    ],
+  });
+}
+
+async function sendArtistMediaError(
+  interaction: ChatInputCommandInteraction | StringSelectMenuInteraction,
+  error: unknown,
+) {
+  let content: string;
+  if (error instanceof CommunityArtistMediaAlreadyApprovedError) {
+    content = "Esta contribucion ya fue aprobada. No se actualizo el artista.";
+  } else if (error instanceof CoverContributionError) {
+    content = error.message;
+  } else {
+    console.error("Artist media contribution failed:", error);
+    content = "El servidor de Cloud rechazo la subida. No se actualizo el artista.";
+  }
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ content, components: [] });
+  } else {
+    await interaction.reply({ content, ephemeral: true });
+  }
+}
+
+async function handleArtistMediaUploadCommand(
+  interaction: ChatInputCommandInteraction,
+  kind: ArtistMediaKind,
+) {
+  if (!canManageCover(interaction)) {
+    await interaction.reply({
+      content: "No tienes permisos para aprobar contribuciones de artistas.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const thread = await getArtistMediaContributionThread(interaction);
+  if (!thread) {
+    await interaction.reply({
+      content:
+        "Este comando solo funciona dentro de un hilo del foro de contribuciones de artistas.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    if (await isArtistMediaThreadApproved(thread.id, kind)) {
+      throw new CommunityArtistMediaAlreadyApprovedError();
+    }
+    const query = interaction.options.getString("artista", true).trim();
+    const artists = await searchArtistProfiles(query);
+    if (artists.length === 0) {
+      throw new CoverContributionError(
+        "NO_SONG_MATCH",
+        "No se encontro ningun perfil de artista. Corrige el nombre y vuelve a intentarlo.",
+      );
+    }
+    await promptArtistMediaSelection(interaction, thread, kind, artists);
+  } catch (error) {
+    await sendArtistMediaError(interaction, error);
+  }
+}
+
+async function handleArtistMediaSelection(
+  interaction: StringSelectMenuInteraction,
+) {
+  const token = interaction.customId.split(":").at(-1) ?? "";
+  const pending = pendingArtistMediaSelections.get(token);
+  if (
+    !pending ||
+    pending.expiresAt <= Date.now() ||
+    pending.moderatorId !== interaction.user.id
+  ) {
+    pendingArtistMediaSelections.delete(token);
+    await interaction.reply({
+      content: "La seleccion vencio o pertenece a otro moderador.",
+      ephemeral: true,
+    });
+    return;
+  }
+  if (!canManageCover(interaction)) {
+    await interaction.reply({
+      content: "No tienes permisos para aprobar contribuciones de artistas.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const thread = await getArtistMediaContributionThread(interaction);
+  if (!thread || thread.id !== pending.threadId) {
+    await interaction.reply({
+      content: "La seleccion solo funciona en el hilo original.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const selectedIndex = Number(interaction.values[0]);
+  const artist = pending.artists[selectedIndex];
+  if (!artist) {
+    await interaction.reply({
+      content: "El perfil seleccionado ya no esta disponible.",
+      ephemeral: true,
+    });
+    return;
+  }
+  pendingArtistMediaSelections.delete(token);
+  await interaction.deferUpdate();
+  try {
+    await processArtistMediaUpload(interaction, thread, artist, pending.kind);
+  } catch (error) {
+    await sendArtistMediaError(interaction, error);
+  }
 }
 
 function buildResultText(submission: TTMLSubmission) {
@@ -552,6 +1682,372 @@ async function getReviewChannel() {
   }
 
   return channel as TextChannel;
+}
+
+const validatedArtworkChannelIds = new Set<string>();
+type ArtworkDiscordChannel = TextChannel | NewsChannel;
+
+async function validateArtworkChannelPermissions(
+  channel: ArtworkDiscordChannel,
+  kind: "reports" | "public",
+) {
+  if (validatedArtworkChannelIds.has(channel.id)) return;
+
+  const everyonePermissions = channel.permissionsFor(
+    channel.guild.roles.everyone,
+  );
+  const botMember =
+    channel.guild.members.me ?? (await channel.guild.members.fetchMe());
+  const botPermissions = channel.permissionsFor(botMember);
+  if (
+    !botPermissions?.has(PermissionFlagsBits.ViewChannel) ||
+    !botPermissions.has(PermissionFlagsBits.SendMessages) ||
+    !botPermissions.has(PermissionFlagsBits.EmbedLinks)
+  ) {
+    throw new Error(
+      `El bot necesita ViewChannel, SendMessages y EmbedLinks en #${channel.name}.`,
+    );
+  }
+
+  if (kind === "reports") {
+    if (everyonePermissions?.has(PermissionFlagsBits.ViewChannel)) {
+      throw new Error(
+        `El canal privado #${channel.name} permite que @everyone lo vea.`,
+      );
+    }
+    const moderatorRole = channel.guild.roles.cache.get(coverReviewerRoleId);
+    if (
+      !moderatorRole ||
+      !channel
+        .permissionsFor(moderatorRole)
+        ?.has(PermissionFlagsBits.ViewChannel)
+    ) {
+      throw new Error(
+        `El rol moderador no puede ver el canal privado #${channel.name}.`,
+      );
+    }
+  } else {
+    if (!everyonePermissions?.has(PermissionFlagsBits.ViewChannel)) {
+      throw new Error(
+        `El canal público #${channel.name} no es visible para @everyone.`,
+      );
+    }
+    if (everyonePermissions.has(PermissionFlagsBits.SendMessages)) {
+      throw new Error(
+        `El canal público #${channel.name} permite publicar a @everyone; debe publicar solo el bot.`,
+      );
+    }
+  }
+
+  validatedArtworkChannelIds.add(channel.id);
+}
+
+async function getArtworkTextChannel(
+  channelId: string,
+  kind: "reports" | "public",
+) {
+  const channel = await client.channels.fetch(channelId);
+  if (
+    !channel ||
+    !isSupportedArtworkChannelType(kind, channel.type)
+  ) {
+    throw new Error(
+      kind === "reports"
+        ? "DISCORD_REPORTS_CHANNEL_ID must be a text channel"
+        : "DISCORD_PUBLIC_COVERS_CHANNEL_ID must be a text channel",
+    );
+  }
+  const textChannel = channel as ArtworkDiscordChannel;
+  await validateArtworkChannelPermissions(textChannel, kind);
+  return textChannel;
+}
+
+let communityAnnouncementsMessageId: string | undefined;
+
+async function ensureCommunityAnnouncementsRoleMessage() {
+  const channel = await client.channels.fetch(
+    discordCommunityAnnouncementsChannelId,
+  );
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    throw new Error(
+      "DISCORD_COMMUNITY_ANNOUNCEMENTS_CHANNEL_ID must be a text channel",
+    );
+  }
+
+  const botMember =
+    channel.guild.members.me ?? (await channel.guild.members.fetchMe());
+  const botPermissions = channel.permissionsFor(botMember);
+  const requiredPermissions = [
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.EmbedLinks,
+    PermissionFlagsBits.AddReactions,
+    PermissionFlagsBits.ReadMessageHistory,
+    PermissionFlagsBits.ManageRoles,
+  ];
+  if (
+    requiredPermissions.some(
+      (permission) => !botPermissions?.has(permission),
+    )
+  ) {
+    throw new Error(
+      `El bot no tiene todos los permisos necesarios en #${channel.name}.`,
+    );
+  }
+
+  const role = await channel.guild.roles.fetch(
+    discordCommunityAnnouncementsRoleId,
+  );
+  if (!role || role.managed || role.position >= botMember.roles.highest.position) {
+    throw new Error(
+      "El rol de anuncios debe estar debajo del rol más alto del bot.",
+    );
+  }
+
+  const recentMessages = await channel.messages.fetch({ limit: 50 });
+  const existing = recentMessages.find(
+    (message) =>
+      message.author.id === client.user?.id &&
+      message.embeds.some(
+        (embed) =>
+          embed.footer?.text ===
+          "Cloud · Rol de anuncios comunitarios",
+      ),
+  );
+  const payload = {
+    embeds: [
+      buildCommunityAnnouncementsRoleEmbed({
+        roleId: discordCommunityAnnouncementsRoleId,
+        emojiId: discordCommunityAnnouncementsEmojiId,
+      }),
+    ],
+    allowedMentions: { parse: [] as never[] },
+  };
+  const message = existing
+    ? await existing.edit(payload)
+    : await channel.send(payload);
+
+  await message.react(discordCommunityAnnouncementsEmojiId);
+  communityAnnouncementsMessageId = message.id;
+  console.log(
+    `Community announcements reaction role ready in #${channel.name}: ${message.id}`,
+  );
+  return message;
+}
+
+async function syncArtworkReportPrivateMessage(
+  report: ArtworkReport,
+  mapping?: SongArtworkMapping | null,
+) {
+  const channel = await getArtworkTextChannel(
+    discordReportsChannelId,
+    "reports",
+  );
+  const payload = {
+    embeds: [buildArtworkReportEmbed(report, mapping)],
+    components: [buildArtworkReportButtons(interactionPrefix, report)],
+    allowedMentions: { parse: [] as never[] },
+  };
+
+  if (
+    report.discordReportsChannelId === channel.id &&
+    report.discordReportMessageId
+  ) {
+    const existing = await channel.messages
+      .fetch(report.discordReportMessageId)
+      .catch(() => null);
+    if (existing) {
+      await existing.edit(payload);
+      return report;
+    }
+  }
+
+  const message = await channel.send(payload);
+  return setArtworkReportDiscordMessage({
+    reportId: report.id,
+    channelId: channel.id,
+    messageId: message.id,
+  });
+}
+
+async function syncArtworkPublicAnnouncement(
+  report: ArtworkReport,
+  mapping: SongArtworkMapping,
+) {
+  const channel = await getArtworkTextChannel(
+    discordPublicCoversChannelId,
+    "public",
+  );
+  const payload = {
+    content: `<@&${discordCommunityAnnouncementsRoleId}>`,
+    embeds: [buildArtworkAnnouncementEmbed(report, mapping)],
+    allowedMentions: {
+      parse: [] as never[],
+      roles: [discordCommunityAnnouncementsRoleId],
+    },
+  };
+
+  if (
+    report.discordPublicChannelId === channel.id &&
+    report.discordPublicMessageId
+  ) {
+    const existing = await channel.messages
+      .fetch(report.discordPublicMessageId)
+      .catch(() => null);
+    if (existing) {
+      await existing.edit(payload);
+      return report;
+    }
+  }
+
+  const message = await channel.send(payload);
+  return setArtworkReportPublicMessage({
+    reportId: report.id,
+    channelId: channel.id,
+    messageId: message.id,
+  });
+}
+
+async function moderateArtworkReport(
+  report: ArtworkReport,
+  reviewerUserId: string,
+  status: "approved" | "rejected",
+) {
+  const resolvedTrack =
+    status === "approved"
+      ? await lookupAppleTrack(report.suggestedAppleUrl ?? "")
+      : undefined;
+  const result = await reviewArtworkReport({
+    reportId: report.id,
+    reviewerUserId,
+    status,
+    resolvedTrack,
+    allowSelfReview:
+      Boolean(discordOwnerUserId) &&
+      reviewerUserId === discordOwnerUserId,
+  });
+
+  const deliveryErrors: string[] = [];
+  let synchronizedReport = result.report;
+  try {
+    synchronizedReport = await syncArtworkReportPrivateMessage(
+      synchronizedReport,
+      result.mapping,
+    );
+  } catch (error) {
+    console.error("Could not update private artwork report message:", error);
+    deliveryErrors.push("private");
+  }
+  if (status === "approved" && result.mapping) {
+    try {
+      synchronizedReport = await syncArtworkPublicAnnouncement(
+        synchronizedReport,
+        result.mapping,
+      );
+    } catch (error) {
+      console.error("Could not publish artwork announcement:", error);
+      deliveryErrors.push("public");
+    }
+  }
+
+  return {
+    report: synchronizedReport,
+    mapping: result.mapping,
+    discordDelivery:
+      deliveryErrors.length === 0 ? ("sent" as const) : ("queued" as const),
+  };
+}
+
+let artworkDiscordRecoveryRunning = false;
+let artworkDiscordRecoveryTimer:
+  | ReturnType<typeof setInterval>
+  | undefined;
+
+async function refreshArtworkReportDiscordMessages() {
+  if (artworkDiscordRecoveryRunning || !client.isReady()) return;
+  artworkDiscordRecoveryRunning = true;
+  try {
+    const reports = await listArtworkReportsForDiscordRecovery();
+    for (const report of reports) {
+      try {
+        const mapping =
+          report.status === "approved"
+            ? await getSongArtworkMapping(report.songId)
+            : null;
+        const synchronized = await syncArtworkReportPrivateMessage(
+          report,
+          mapping,
+        );
+        if (report.status === "approved" && mapping) {
+          await syncArtworkPublicAnnouncement(synchronized, mapping);
+        }
+      } catch (error) {
+        console.error(
+          `Could not recover artwork report ${report.id} in Discord:`,
+          error,
+        );
+      }
+    }
+  } finally {
+    artworkDiscordRecoveryRunning = false;
+  }
+}
+
+function startArtworkReportDiscordRecovery() {
+  if (artworkDiscordRecoveryTimer) return;
+  artworkDiscordRecoveryTimer = setInterval(() => {
+    void refreshArtworkReportDiscordMessages();
+  }, 60_000);
+  artworkDiscordRecoveryTimer.unref();
+}
+
+async function handleArtworkReportButton(interaction: ButtonInteraction) {
+  const parsed = parseArtworkReportCustomId(
+    interactionPrefix,
+    interaction.customId,
+  );
+  if (!parsed) return;
+
+  if (interaction.channelId !== discordReportsChannelId) {
+    await interaction.reply({
+      content: "Este botón solo funciona en el canal privado de reportes.",
+      ephemeral: true,
+    });
+    return;
+  }
+  if (!(await canModerateArtwork(interaction.user.id))) {
+    await interaction.reply({
+      content: "Solo el rol de moderador puede revisar portadas.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const report = await getArtworkReport(parsed.reportId);
+    if (!report) {
+      throw new ArtworkReportNotFoundError("Reporte no encontrado.");
+    }
+    const result = await moderateArtworkReport(
+      report,
+      interaction.user.id,
+      parsed.action === "approve" ? "approved" : "rejected",
+    );
+    const actionText =
+      result.report.status === "approved"
+        ? "Portada aplicada y reporte aprobado."
+        : "Enlace marcado como incorrecto y reporte rechazado.";
+    await interaction.editReply({
+      content:
+        result.discordDelivery === "sent"
+          ? actionText
+          : `${actionText} Discord reintentará sincronizar el mensaje pendiente.`,
+    });
+  } catch (error) {
+    const response = artworkErrorResponse(error);
+    await interaction.editReply({ content: response.error });
+  }
 }
 
 async function publishSubmission(submission: TTMLSubmission) {
@@ -691,6 +2187,10 @@ async function handleReviewModal(interaction: ModalSubmitInteraction) {
   submission.moderator = {
     id: interaction.user.id,
     name: interaction.user.globalName ?? interaction.user.username,
+    avatarUrl: getDiscordAvatarUrl({
+      id: interaction.user.id,
+      avatar: interaction.user.avatar,
+    }),
     comment,
   };
   await saveSubmission(submission);
@@ -1007,26 +2507,350 @@ function toReviewResponse(submission: TTMLSubmission) {
   };
 }
 
+function toCommunityCoverResponse(cover: CommunityCover) {
+  return {
+    id: cover.id,
+    songKey: cover.requestedSongKey ?? cover.songKey,
+    artist: cover.song.artist,
+    title: cover.song.title,
+    album: cover.song.album,
+    width: cover.width,
+    height: cover.height,
+    coverUrl: `${publicBaseUrl}/api/covers/${encodeURIComponent(cover.songKey)}.png?v=${cover.sha256.slice(0, 12)}`,
+    submitter: cover.submitter,
+    moderator: cover.moderator,
+    updatedAt: cover.updatedAt,
+  };
+}
+
+function toCommunityArtistMediaResponse(media: CommunityArtistMedia) {
+  return {
+    id: media.id,
+    artistKey: media.artistKey,
+    artist: media.artist,
+    kind: media.kind,
+    width: media.width,
+    height: media.height,
+    mediaUrl: `${publicBaseUrl}/api/artists/media/${encodeURIComponent(media.artistKey)}.png?v=${media.sha256.slice(0, 12)}`,
+    submitter: media.submitter,
+    moderator: media.moderator,
+    updatedAt: media.updatedAt,
+  };
+}
+
 app.get("/health", async (_req, res) => {
+  // No consultes PostgreSQL aqui: Railway usa esta ruta mientras la base de
+  // datos tambien puede estar despertando. La API debe poder responder desde
+  // el primer instante para evitar un 502 del proxy.
+  res.json({
+    ok: true,
+    bootstrapReady: backendBootstrapReady,
+    bootstrapError: backendBootstrapError,
+    botReady: client.isReady(),
+    database: isDatabaseEnabled()
+      ? backendBootstrapReady
+        ? "postgresql"
+        : "initializing"
+      : "memory",
+    interactionProtocol: "railwayreview-v6-artwork-reports",
+    interactionNamespace,
+    discordOAuth: Boolean(discordClientId && discordClientSecret),
+    communityAnnouncementsRoleReady: Boolean(
+      communityAnnouncementsMessageId,
+    ),
+  });
+});
+
+app.get("/api/catalog/apple/artwork", async (req, res) => {
+  const title =
+    typeof req.query.title === "string" ? req.query.title.trim() : "";
+  const artist =
+    typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+  if (!title || !artist || title.length > 200 || artist.length > 200) {
+    res.status(400).json({ error: "Title and artist are required" });
+    return;
+  }
+
   try {
-    res.json({
-      ok: true,
-      botReady: client.isReady(),
-      database: isDatabaseEnabled() ? "postgresql" : "memory",
-      submissions: await countSubmissions(),
-      interactionProtocol: "railwayreview-v3",
-      interactionNamespace,
-      discordOAuth: Boolean(discordClientId && discordClientSecret),
-    });
+    const results = await searchAppleArtworkCatalog(title, artist);
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=600, stale-while-revalidate=86400",
+    );
+    res.json({ results });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    res.status(503).json({
-      ok: false,
-      botReady: client.isReady(),
-      database: "unavailable",
-      error: message,
+    console.error("Apple artwork catalog error:", error);
+    res.status(502).json({
+      error: "Apple Music catalog is temporarily unavailable",
     });
   }
+});
+
+function artworkErrorResponse(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "No se pudo procesar el reporte.";
+  if (error instanceof ArtworkReportValidationError) {
+    return { status: 400, error: message };
+  }
+  if (error instanceof ArtworkReportDuplicateError) {
+    return { status: 409, error: message };
+  }
+  if (error instanceof ArtworkReportRateLimitError) {
+    return { status: 429, error: message };
+  }
+  if (error instanceof ArtworkReportNotFoundError) {
+    return { status: 404, error: message };
+  }
+  if (error instanceof ArtworkReportPermissionError) {
+    return { status: 403, error: message };
+  }
+  if (error instanceof ArtworkReportAlreadyReviewedError) {
+    return { status: 409, error: message };
+  }
+  console.error("Artwork report error:", error);
+  return { status: 500, error: "No se pudo procesar el reporte." };
+}
+
+app.post("/api/songs/:songId/artwork-reports", async (req, res) => {
+  const reporter = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!reporter) {
+    res.status(401).json({
+      error: "Inicia sesión con Discord para reportar una portada.",
+    });
+    return;
+  }
+  try {
+    const report = await createArtworkReport({
+      songId: req.params.songId,
+      reporterUserId: reporter.id,
+      title: typeof req.body?.title === "string" ? req.body.title : "",
+      artist: typeof req.body?.artist === "string" ? req.body.artist : "",
+      album: typeof req.body?.album === "string" ? req.body.album : undefined,
+      currentAppleTrackId:
+        typeof req.body?.currentAppleTrackId === "number"
+          ? req.body.currentAppleTrackId
+          : undefined,
+      currentArtworkUrl:
+        typeof req.body?.currentArtworkUrl === "string"
+          ? req.body.currentArtworkUrl
+          : undefined,
+      currentAppleMusicUrl:
+        typeof req.body?.currentAppleMusicUrl === "string"
+          ? req.body.currentAppleMusicUrl
+          : undefined,
+      suggestedAppleUrl:
+        typeof req.body?.suggestedAppleUrl === "string"
+          ? req.body.suggestedAppleUrl
+          : "",
+      reason: req.body?.reason,
+      comment:
+        typeof req.body?.comment === "string" ? req.body.comment : undefined,
+    });
+    try {
+      const synchronized = await syncArtworkReportPrivateMessage(report);
+      res.status(201).json({
+        report: synchronized,
+        discordDelivery: "sent",
+      });
+    } catch (discordError) {
+      console.error(
+        `Artwork report ${report.id} was saved but Discord delivery is pending:`,
+        discordError,
+      );
+      res.status(202).json({
+        report,
+        discordDelivery: "queued",
+      });
+    }
+  } catch (error) {
+    const response = artworkErrorResponse(error);
+    res.status(response.status).json({ error: response.error });
+  }
+});
+
+app.get("/api/songs/:songId/artwork-report-status", async (req, res) => {
+  const reporter = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!reporter) {
+    res.status(401).json({ error: "Discord session is not valid" });
+    return;
+  }
+  const [report, mapping] = await Promise.all([
+    getArtworkReportStatus(req.params.songId, reporter.id),
+    getSongArtworkMapping(req.params.songId),
+  ]);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ report, mapping });
+});
+
+app.get("/api/songs/:songId/artwork-mapping", async (req, res) => {
+  const mapping = await getSongArtworkMapping(req.params.songId);
+  if (!mapping) {
+    res.status(404).json({ error: "Apple artwork mapping not found" });
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.json({ mapping });
+});
+
+app.get("/api/admin/artwork-reports", async (req, res) => {
+  const reviewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!reviewer || !(await canModerateArtwork(reviewer.id))) {
+    res.status(403).json({ error: "No tienes permisos de moderación." });
+    return;
+  }
+  const requestedStatus =
+    typeof req.query.status === "string" ? req.query.status : "pending";
+  if (!["pending", "approved", "rejected"].includes(requestedStatus)) {
+    res.status(400).json({ error: "El estado solicitado no es válido." });
+    return;
+  }
+  const reports = await listArtworkReports(
+    requestedStatus as ArtworkReportStatus,
+  );
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ reports });
+});
+
+app.patch("/api/admin/artwork-reports/:reportId", async (req, res) => {
+  const reviewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!reviewer || !(await canModerateArtwork(reviewer.id))) {
+    res.status(403).json({ error: "No tienes permisos de moderación." });
+    return;
+  }
+  const status = req.body?.status;
+  if (status !== "approved" && status !== "rejected") {
+    res.status(400).json({ error: "Usa approved o rejected." });
+    return;
+  }
+  try {
+    const report = await getArtworkReport(req.params.reportId);
+    if (!report) {
+      throw new ArtworkReportNotFoundError("Reporte no encontrado.");
+    }
+    const result = await moderateArtworkReport(
+      report,
+      reviewer.id,
+      status,
+    );
+    res.json(result);
+  } catch (error) {
+    const response = artworkErrorResponse(error);
+    res.status(response.status).json({ error: response.error });
+  }
+});
+
+// Song cover uploads and downloads were retired. Keep the historical tables
+// untouched, but make the old public surface explicitly unavailable.
+app.use("/api/covers", (_req, res) => {
+  res.status(410).json({
+    error: "Las portadas comunitarias fueron sustituidas por Apple Music.",
+  });
+});
+
+app.get("/api/covers/approved", async (req, res) => {
+  const artist =
+    typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+  const title =
+    typeof req.query.title === "string" ? req.query.title.trim() : "";
+  if (!artist || !title) {
+    res.status(400).json({ error: "Artist and title are required" });
+    return;
+  }
+
+  const cover = await getCommunityCover(artist, title);
+  if (!cover) {
+    res.status(404).json({ error: "Approved community cover not found" });
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.json(toCommunityCoverResponse(cover));
+});
+
+app.post("/api/covers/approved/batch", async (req, res) => {
+  const songs = Array.isArray(req.body?.songs) ? req.body.songs : [];
+  const validSongs = songs
+    .slice(0, 500)
+    .filter(
+      (song: unknown): song is { artist: string; title: string } =>
+        typeof song === "object" &&
+        song !== null &&
+        "artist" in song &&
+        "title" in song &&
+        typeof song.artist === "string" &&
+        typeof song.title === "string" &&
+        Boolean(song.artist.trim() && song.title.trim()),
+    );
+  if (validSongs.length === 0) {
+    res.status(400).json({ error: "At least one valid song is required" });
+    return;
+  }
+
+  const covers = await getCommunityCoversBatch(validSongs);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ covers: covers.map(toCommunityCoverResponse) });
+});
+
+app.get("/api/covers/:songKey.png", async (req, res) => {
+  const image = await getCommunityCoverImage(req.params.songKey);
+  if (!image) {
+    res.status(404).json({ error: "Community cover not found" });
+    return;
+  }
+
+  const etag = `"${image.sha256}"`;
+  if (req.headers["if-none-match"] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Content-Length", String(image.pngData.byteLength));
+  res.setHeader("ETag", etag);
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=86400");
+  res.send(image.pngData);
+});
+
+app.get("/api/artists/media", async (req, res) => {
+  const artist =
+    typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+  const kind =
+    req.query.kind === "avatar" || req.query.kind === "banner"
+      ? req.query.kind
+      : undefined;
+  if (!artist || !kind) {
+    res.status(400).json({
+      error: "artist y kind (avatar o banner) son requeridos",
+    });
+    return;
+  }
+
+  const media = await getCommunityArtistMedia(artist, kind);
+  if (media.length === 0) {
+    res.status(404).json({ error: "Community artist media not found" });
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.json({ media: media.map(toCommunityArtistMediaResponse) });
+});
+
+app.get("/api/artists/media/:artistKey.png", async (req, res) => {
+  const image = await getCommunityArtistMediaImage(req.params.artistKey);
+  if (!image) {
+    res.status(404).json({ error: "Community artist media not found" });
+    return;
+  }
+
+  const etag = `"${image.sha256}"`;
+  if (req.headers["if-none-match"] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Content-Length", String(image.pngData.byteLength));
+  res.setHeader("ETag", etag);
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=86400");
+  res.send(image.pngData);
 });
 
 app.get("/api/maintenance/status", async (_req, res) => {
@@ -1353,7 +3177,13 @@ app.get("/api/ttml/approved", async (req, res) => {
     fileName: submission.fileName,
     ttmlContent: submission.ttmlContent,
     approvedAt: submission.createdAt,
-    moderator: submission.moderator?.name,
+    moderator: submission.moderator
+      ? {
+          id: submission.moderator.id,
+          name: submission.moderator.name,
+          avatarUrl: submission.moderator.avatarUrl,
+        }
+      : undefined,
     synchronizer: submission.submitter
       ? {
           id: submission.submitter.id,
@@ -1381,11 +3211,115 @@ client.on("clientReady", () => {
     console.error("Could not register slash commands:", error);
   });
   void refreshPendingReviewMessages();
+  void ensureCommunityAnnouncementsRoleMessage().catch((error) => {
+    console.error(
+      "Could not prepare community announcements reaction role:",
+      error,
+    );
+  });
+  void refreshArtworkReportDiscordMessages();
+  startArtworkReportDiscordRecovery();
+});
+
+client.on("messageReactionAdd", async (reaction, user) => {
+  if (user.bot || !communityAnnouncementsMessageId) return;
+
+  try {
+    const completeReaction = reaction.partial
+      ? await reaction.fetch()
+      : reaction;
+    const message = completeReaction.message.partial
+      ? await completeReaction.message.fetch()
+      : completeReaction.message;
+    if (
+      !isCommunityAnnouncementsReaction(
+        {
+          channelId: discordCommunityAnnouncementsChannelId,
+          messageId: communityAnnouncementsMessageId,
+          emojiId: discordCommunityAnnouncementsEmojiId,
+        },
+        {
+          channelId: message.channelId,
+          messageId: message.id,
+          emojiId: completeReaction.emoji.id,
+        },
+      )
+    ) {
+      return;
+    }
+
+    const guild = message.guild;
+    if (!guild) return;
+    const member = await guild.members.fetch(user.id);
+    if (!member.roles.cache.has(discordCommunityAnnouncementsRoleId)) {
+      await member.roles.add(
+        discordCommunityAnnouncementsRoleId,
+        "Reaccionó al mensaje de anuncios comunitarios de Cloud",
+      );
+      console.log(
+        `Community announcements role assigned to Discord user ${user.id}`,
+      );
+    }
+  } catch (error) {
+    console.error("Could not assign community announcements role:", error);
+  }
 });
 
 client.on("interactionCreate", async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
+      if (
+        interaction.commandName === "say" &&
+        interaction.options.getSubcommand() === "hi"
+      ) {
+        const selection = pickRandomGreeting(previousGreetingIndex);
+        previousGreetingIndex = selection.index;
+        const availableEmojis = client.emojis.cache
+          .filter(
+            (emoji) =>
+              Boolean(emoji.name) &&
+              greetingEmojiNames.includes(
+                emoji.name as (typeof greetingEmojiNames)[number],
+              ),
+          )
+          .map((emoji) => ({
+            name: emoji.name!,
+            markup: emoji.toString(),
+          }));
+        const emoji = pickRandomGreetingEmoji(
+          availableEmojis,
+          previousGreetingEmojiName,
+        );
+        previousGreetingEmojiName = emoji?.name;
+        await interaction.reply(
+          `${selection.greeting.text}${emoji ? ` ${emoji.markup}` : ""}`,
+        );
+        console.log(
+          `/say hi used by Discord user ${interaction.user.id}: ${selection.greeting.language}, emoji=${emoji?.name ?? "none"}`,
+        );
+        return;
+      }
+
+      if (
+        interaction.commandName === "cover" &&
+        interaction.options.getSubcommand() === "upload"
+      ) {
+        await handleCoverUploadCommand(interaction);
+        return;
+      }
+
+      if (
+        (interaction.commandName === "app" ||
+          interaction.commandName === "abp") &&
+        interaction.options.getSubcommand() === "upload"
+      ) {
+        await handleArtistMediaUploadCommand(
+          interaction,
+          interaction.commandName === "app" ? "avatar" : "banner",
+        );
+        return;
+      }
+
       if (interaction.commandName === "delete-all-ttmls") {
         await handleDeleteAllCommand(interaction);
         return;
@@ -1417,6 +3351,32 @@ client.on("interactionCreate", async (interaction) => {
         await handleDeleteTtmlCommand(interaction);
         return;
       }
+    }
+
+    if (
+      interaction.isStringSelectMenu() &&
+      interaction.customId.startsWith(`${interactionPrefix}cover-select:`)
+    ) {
+      await handleCoverSelection(interaction);
+      return;
+    }
+
+    if (
+      interaction.isStringSelectMenu() &&
+      interaction.customId.startsWith(
+        `${interactionPrefix}artist-media-select:`,
+      )
+    ) {
+      await handleArtistMediaSelection(interaction);
+      return;
+    }
+
+    if (
+      interaction.isButton() &&
+      interaction.customId.startsWith(`${interactionPrefix}artwork:`)
+    ) {
+      await handleArtworkReportButton(interaction);
+      return;
     }
 
     if (
@@ -1455,21 +3415,53 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-await initializeSubmissionStore();
-await registerSlashCommands().catch((error) => {
-  console.error("Could not register slash commands before login:", error);
-});
-await client.login(discordToken);
-
 const server = app.listen(port, () => {
   console.log(`Cloud TTML review API listening on http://localhost:${port}`);
 });
 
+async function bootstrapBackendDependencies() {
+  if (backendBootstrapRunning || backendBootstrapReady) return;
+  backendBootstrapRunning = true;
+  backendBootstrapError = null;
+  try {
+    await initializeSubmissionStore();
+    await initializeArtworkReportStore();
+    await registerSlashCommands().catch((error) => {
+      console.error("Could not register slash commands before login:", error);
+    });
+    if (!client.isReady()) await client.login(discordToken);
+    backendBootstrapReady = true;
+    console.log("Cloud backend dependencies are ready");
+  } catch (error) {
+    backendBootstrapError =
+      error instanceof Error ? error.message : "Unknown bootstrap error";
+    console.error(
+      "Cloud backend dependencies failed to initialize; retrying in 15 seconds:",
+      error,
+    );
+    backendBootstrapTimer = setTimeout(() => {
+      backendBootstrapTimer = undefined;
+      void bootstrapBackendDependencies();
+    }, 15_000);
+  } finally {
+    backendBootstrapRunning = false;
+  }
+}
+
+void bootstrapBackendDependencies();
+
 async function shutdown(signal: string) {
   console.log(`Received ${signal}. Closing Cloud TTML bot.`);
+  if (artworkDiscordRecoveryTimer) {
+    clearInterval(artworkDiscordRecoveryTimer);
+  }
+  if (backendBootstrapTimer) clearTimeout(backendBootstrapTimer);
   server.close();
   client.destroy();
-  await closeSubmissionStore();
+  await Promise.all([
+    closeSubmissionStore(),
+    closeArtworkReportStore(),
+  ]);
   process.exit(0);
 }
 

@@ -1,7 +1,11 @@
 import {
+  ApplicationIntegrationType,
+  InteractionContextType,
   SlashCommandBuilder,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
+
+export const publicGlobalCommandNames = new Set(["say"]);
 
 export function buildCommandDefinitions() {
   const maintenanceOptions = (builder: SlashCommandSubcommandBuilder) =>
@@ -44,6 +48,54 @@ export function buildCommandDefinitions() {
       );
 
   return [
+    new SlashCommandBuilder()
+      .setName("cover")
+      .setDescription("Gestiona contribuciones de portadas de Cloud.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("upload")
+          .setDescription("Aprueba la portada PNG mas reciente de este hilo.")
+          .addStringOption((option) =>
+            option
+              .setName("artista")
+              .setDescription("Artista exacto de la cancion")
+              .setRequired(true),
+          )
+          .addStringOption((option) =>
+            option
+              .setName("cancion")
+              .setDescription("Titulo exacto de la cancion")
+              .setRequired(true),
+          ),
+      ),
+    new SlashCommandBuilder()
+      .setName("app")
+      .setDescription("Gestiona fotos de perfil de artistas en Cloud.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("upload")
+          .setDescription("Aprueba la foto de artista mas reciente del hilo.")
+          .addStringOption((option) =>
+            option
+              .setName("artista")
+              .setDescription("Nombre del artista que quieres buscar")
+              .setRequired(true),
+          ),
+      ),
+    new SlashCommandBuilder()
+      .setName("abp")
+      .setDescription("Gestiona banners de artistas en Cloud.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("upload")
+          .setDescription("Aprueba el banner de artista mas reciente del hilo.")
+          .addStringOption((option) =>
+            option
+              .setName("artista")
+              .setDescription("Nombre del artista que quieres buscar")
+              .setRequired(true),
+          ),
+      ),
     new SlashCommandBuilder()
       .setName("delete-all-ttmls")
       .setDescription("Elimina todos los TTML comunitarios con backup previo."),
@@ -119,6 +171,19 @@ export function buildCommandDefinitions() {
               .setDescription("Nombre exacto del artista")
               .setRequired(true),
           ),
+      ),
+    new SlashCommandBuilder()
+      .setName("say")
+      .setDescription("Cloud te saluda en un idioma al azar.")
+      .setContexts(
+        InteractionContextType.Guild,
+        InteractionContextType.BotDM,
+      )
+      .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("hi")
+          .setDescription("Recibe un saludo en un idioma al azar."),
       ),
   ].map((command) => command.toJSON());
 }
