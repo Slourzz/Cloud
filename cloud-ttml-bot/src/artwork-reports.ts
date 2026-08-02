@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { normalizeCatalogValue } from "./cover-contributions.js";
 
 const { Pool } = pg;
 const APPLE_HOSTS = new Set(["music.apple.com", "itunes.apple.com"]);
@@ -21,6 +22,8 @@ export type ArtworkReportReason =
 
 export type SongArtworkMapping = {
   songId: string;
+  songTitle?: string;
+  songArtist?: string;
   source: "apple";
   appleTrackId: number;
   appleCollectionId?: number;
@@ -219,6 +222,8 @@ function reportFromRow(row: any): ArtworkReport {
 function mappingFromRow(row: any): SongArtworkMapping {
   return {
     songId: row.song_id,
+    songTitle: row.song_title ?? undefined,
+    songArtist: row.song_artist ?? undefined,
     source: "apple",
     appleTrackId: Number(row.apple_track_id),
     appleCollectionId:
@@ -285,11 +290,53 @@ export async function initializeArtworkReportStore() {
       ADD COLUMN IF NOT EXISTS discord_public_channel_id TEXT,
       ADD COLUMN IF NOT EXISTS discord_public_message_id TEXT
   `);
+  await pool.query(`
+    ALTER TABLE song_artwork_mappings
+      ADD COLUMN IF NOT EXISTS song_title TEXT,
+      ADD COLUMN IF NOT EXISTS song_artist TEXT,
+      ADD COLUMN IF NOT EXISTS normalized_title TEXT,
+      ADD COLUMN IF NOT EXISTS normalized_artist TEXT
+  `);
+  const legacyMappings = await pool.query(`
+    SELECT m.song_id, report.song
+    FROM song_artwork_mappings m
+    JOIN LATERAL (
+      SELECT ar.song
+      FROM artwork_reports ar
+      WHERE ar.song_id = m.song_id AND ar.status = 'approved'
+      ORDER BY ar.reviewed_at DESC NULLS LAST, ar.created_at DESC
+      LIMIT 1
+    ) report ON TRUE
+    WHERE m.normalized_title IS NULL OR m.normalized_artist IS NULL
+  `);
+  for (const row of legacyMappings.rows) {
+    const title = typeof row.song?.title === "string" ? row.song.title : "";
+    const artist = typeof row.song?.artist === "string" ? row.song.artist : "";
+    if (!title || !artist) continue;
+    await pool.query(
+      `UPDATE song_artwork_mappings
+       SET song_title = $2, song_artist = $3,
+           normalized_title = $4, normalized_artist = $5,
+           updated_at = NOW()
+       WHERE song_id = $1`,
+      [
+        row.song_id,
+        title,
+        artist,
+        normalizeCatalogValue(title),
+        normalizeCatalogValue(artist),
+      ],
+    );
+  }
   await pool.query(
     "CREATE INDEX IF NOT EXISTS song_artwork_mappings_song_id_idx ON song_artwork_mappings (song_id)",
   );
   await pool.query(
     "CREATE INDEX IF NOT EXISTS song_artwork_mappings_apple_track_id_idx ON song_artwork_mappings (apple_track_id)",
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS song_artwork_mappings_identity_idx
+     ON song_artwork_mappings (normalized_title, normalized_artist)`,
   );
   await pool.query(
     "CREATE INDEX IF NOT EXISTS artwork_reports_song_id_idx ON artwork_reports (song_id)",
@@ -430,11 +477,33 @@ export async function getArtworkReportStatus(
   return result.rows[0] ? reportFromRow(result.rows[0]) : null;
 }
 
-export async function getSongArtworkMapping(songId: string) {
-  if (!pool) return memoryMappings.get(songId) ?? null;
+export async function getSongArtworkMapping(
+  songId: string,
+  identity?: { title?: string; artist?: string },
+) {
+  if (!pool) {
+    const exact = memoryMappings.get(songId);
+    if (exact) return exact;
+    const title = normalizeCatalogValue(identity?.title ?? "");
+    const artist = normalizeCatalogValue(identity?.artist ?? "");
+    if (!title || !artist) return null;
+    return (
+      [...memoryMappings.values()].find(
+        (mapping) =>
+          normalizeCatalogValue(mapping.songTitle ?? "") === title &&
+          normalizeCatalogValue(mapping.songArtist ?? "") === artist,
+      ) ?? null
+    );
+  }
+  const normalizedTitle = normalizeCatalogValue(identity?.title ?? "");
+  const normalizedArtist = normalizeCatalogValue(identity?.artist ?? "");
   const result = await pool.query(
-    "SELECT * FROM song_artwork_mappings WHERE song_id = $1",
-    [songId],
+    `SELECT * FROM song_artwork_mappings
+     WHERE song_id = $1
+        OR ($2 <> '' AND $3 <> '' AND normalized_title = $2 AND normalized_artist = $3)
+     ORDER BY CASE WHEN song_id = $1 THEN 0 ELSE 1 END, verified_at DESC NULLS LAST
+     LIMIT 1`,
+    [songId, normalizedTitle, normalizedArtist],
   );
   return result.rows[0] ? mappingFromRow(result.rows[0]) : null;
 }
@@ -587,6 +656,8 @@ export async function reviewArtworkReport(input: {
       const now = new Date().toISOString();
       memoryMappings.set(report.songId, {
         songId: report.songId,
+        songTitle: report.song.title,
+        songArtist: report.song.artist,
         source: "apple",
         ...input.resolvedTrack,
         confidenceScore: 1_000,
@@ -632,11 +703,16 @@ export async function reviewArtworkReport(input: {
     if (input.status === "approved" && input.resolvedTrack) {
       const mapped = await client.query(
         `INSERT INTO song_artwork_mappings (
-          song_id, source, apple_track_id, apple_collection_id, artwork_url,
+          song_id, song_title, song_artist, normalized_title, normalized_artist,
+          source, apple_track_id, apple_collection_id, artwork_url,
           apple_music_url, confidence_score, cover_verified,
           verified_by_user_id, verified_at
-        ) VALUES ($1,'apple',$2,$3,$4,$5,1000,TRUE,$6,NOW())
+        ) VALUES ($1,$2,$3,$4,$5,'apple',$6,$7,$8,$9,1000,TRUE,$10,NOW())
         ON CONFLICT (song_id) DO UPDATE SET
+          song_title = EXCLUDED.song_title,
+          song_artist = EXCLUDED.song_artist,
+          normalized_title = EXCLUDED.normalized_title,
+          normalized_artist = EXCLUDED.normalized_artist,
           source = 'apple',
           apple_track_id = EXCLUDED.apple_track_id,
           apple_collection_id = EXCLUDED.apple_collection_id,
@@ -650,6 +726,10 @@ export async function reviewArtworkReport(input: {
         RETURNING *`,
         [
           report.songId,
+          report.song.title,
+          report.song.artist,
+          normalizeCatalogValue(report.song.title),
+          normalizeCatalogValue(report.song.artist),
           input.resolvedTrack.appleTrackId,
           input.resolvedTrack.appleCollectionId ?? null,
           input.resolvedTrack.artworkUrl,

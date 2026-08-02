@@ -195,6 +195,30 @@ test("approval creates a verified Apple mapping atomically in the store", async 
   assert.equal(mapping?.verifiedByUserId, "moderator-1");
 });
 
+test("an approved mapping survives a different local song id", async () => {
+  const report = await createArtworkReport(baseInput);
+  await reviewArtworkReport({
+    reportId: report.id,
+    reviewerUserId: "moderator-1",
+    status: "approved",
+    resolvedTrack: {
+      appleTrackId: 456,
+      appleCollectionId: 123,
+      artworkUrl: "https://is1-ssl.mzstatic.com/image/1200x1200bb.jpg",
+      appleMusicUrl:
+        "https://music.apple.com/mx/album/dark-beach/123?i=456",
+    },
+  });
+
+  const mapping = await getSongArtworkMapping("new-install-song-id", {
+    title: "  DARK BEACH ",
+    artist: "Pastel Ghost",
+  });
+  assert.equal(mapping?.songId, baseInput.songId);
+  assert.equal(mapping?.appleTrackId, 456);
+  assert.equal(mapping?.coverVerified, true);
+});
+
 test("a report cannot be reviewed twice", async () => {
   const report = await createArtworkReport(baseInput);
   await reviewArtworkReport({

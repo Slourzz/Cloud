@@ -2676,20 +2676,31 @@ app.get("/api/songs/:songId/artwork-report-status", async (req, res) => {
   }
   const [report, mapping] = await Promise.all([
     getArtworkReportStatus(req.params.songId, reporter.id),
-    getSongArtworkMapping(req.params.songId),
+    getSongArtworkMapping(req.params.songId, {
+      title: typeof req.query.title === "string" ? req.query.title : undefined,
+      artist: typeof req.query.artist === "string" ? req.query.artist : undefined,
+    }),
   ]);
   res.setHeader("Cache-Control", "no-store");
-  res.json({ report, mapping });
+  res.json({
+    report,
+    mapping: mapping ? { ...mapping, songId: req.params.songId } : null,
+  });
 });
 
 app.get("/api/songs/:songId/artwork-mapping", async (req, res) => {
-  const mapping = await getSongArtworkMapping(req.params.songId);
+  const mapping = await getSongArtworkMapping(req.params.songId, {
+    title: typeof req.query.title === "string" ? req.query.title : undefined,
+    artist: typeof req.query.artist === "string" ? req.query.artist : undefined,
+  });
   if (!mapping) {
     res.status(404).json({ error: "Apple artwork mapping not found" });
     return;
   }
   res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-  res.json({ mapping });
+  // Return the requesting client's ID even when the persistent mapping was
+  // recovered through title + artist. Local IDs are installation-specific.
+  res.json({ mapping: { ...mapping, songId: req.params.songId } });
 });
 
 app.get("/api/admin/artwork-reports", async (req, res) => {
