@@ -3180,6 +3180,25 @@ app.get("/api/ttml/approved", async (req, res) => {
     return;
   }
 
+  const [moderator, synchronizer] = await Promise.all([
+    resolveCurrentCreditIdentity(
+      submission.moderator
+        ? {
+            id: submission.moderator.id,
+            name: submission.moderator.name,
+            avatarUrl: submission.moderator.avatarUrl,
+          }
+        : undefined,
+    ),
+    submission.submitter
+      ? resolveCurrentDiscordIdentity(submission.submitter).then((identity) => ({
+          id: identity.id,
+          name: identity.displayName,
+          avatarUrl: identity.avatarUrl,
+        }))
+      : undefined,
+  ]);
+
   res.json({
     id: submission.id,
     artist: submission.song.artist,
@@ -3188,21 +3207,42 @@ app.get("/api/ttml/approved", async (req, res) => {
     fileName: submission.fileName,
     ttmlContent: submission.ttmlContent,
     approvedAt: submission.createdAt,
-    moderator: submission.moderator
-      ? {
-          id: submission.moderator.id,
-          name: submission.moderator.name,
-          avatarUrl: submission.moderator.avatarUrl,
-        }
-      : undefined,
-    synchronizer: submission.submitter
-      ? {
-          id: submission.submitter.id,
-          name: submission.submitter.displayName,
-          avatarUrl: submission.submitter.avatarUrl,
-        }
-      : undefined,
+    moderator,
+    synchronizer,
   });
+});
+
+app.get("/api/discord/identities", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  const ids = (typeof req.query.ids === "string" ? req.query.ids : "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id, index, all) => /^\d{15,24}$/.test(id) && all.indexOf(id) === index)
+    .slice(0, 20);
+
+  if (ids.length === 0) {
+    res.status(400).json({ error: "At least one valid Discord user id is required" });
+    return;
+  }
+
+  const identities = await Promise.all(
+    ids.map(async (id) => {
+      const identity = await resolveCurrentDiscordIdentity({
+        id,
+        username: id,
+        displayName: id,
+      });
+      return identity.displayName === id
+        ? null
+        : {
+            id: identity.id,
+            name: identity.displayName,
+            avatarUrl: identity.avatarUrl,
+          };
+    }),
+  );
+
+  res.json({ identities: identities.filter(Boolean) });
 });
 
 app.get("/api/ttml/review/:submissionId", async (req, res) => {
@@ -3457,6 +3497,53 @@ async function bootstrapBackendDependencies() {
   } finally {
     backendBootstrapRunning = false;
   }
+}
+
+const discordIdentityCache = new Map<
+  string,
+  { identity: DiscordIdentity; expiresAt: number }
+>();
+const DISCORD_IDENTITY_CACHE_MS = 5 * 60 * 1000;
+
+async function resolveCurrentDiscordIdentity(
+  snapshot: DiscordIdentity,
+): Promise<DiscordIdentity> {
+  const cached = discordIdentityCache.get(snapshot.id);
+  if (cached && cached.expiresAt > Date.now()) return cached.identity;
+  if (!client.isReady()) return snapshot;
+
+  try {
+    const user = await client.users.fetch(snapshot.id, { force: true });
+    const identity = discordIdentityFromUser(user);
+    discordIdentityCache.set(snapshot.id, {
+      identity,
+      expiresAt: Date.now() + DISCORD_IDENTITY_CACHE_MS,
+    });
+    return identity;
+  } catch {
+    // The saved identity is intentionally retained as an offline/deleted-user
+    // fallback so a contribution can never lose its attribution.
+    return snapshot;
+  }
+}
+
+async function resolveCurrentCreditIdentity(
+  snapshot:
+    | { id: string; name: string; avatarUrl?: string }
+    | undefined,
+) {
+  if (!snapshot) return undefined;
+  const current = await resolveCurrentDiscordIdentity({
+    id: snapshot.id,
+    username: snapshot.name,
+    displayName: snapshot.name,
+    avatarUrl: snapshot.avatarUrl,
+  });
+  return {
+    id: current.id,
+    name: current.displayName,
+    avatarUrl: current.avatarUrl ?? snapshot.avatarUrl,
+  };
 }
 
 void bootstrapBackendDependencies();
