@@ -101,7 +101,7 @@ document.querySelectorAll('.cards, .credit-list, .quick-links').forEach(group =>
   [...group.children].forEach((item, index) => item.style.setProperty('--stagger-delay', `${Math.min(index, 7) * 70}ms`));
 });
 
-const parallaxItems = [...document.querySelectorAll('.player-showcase, .page-header, .content-section, .home-hero, .intro-grid')];
+const parallaxItems = [...document.querySelectorAll('.player-showcase, .page-header, .content-section, .home-hero, .intro-grid')].filter(element => element !== scrollHero);
 const scrollMediaItems = [...document.querySelectorAll('.guide-media img, .guide-media video, .hero-media img')];
 parallaxItems.forEach((element, index) => {
   const isMedia = element.matches('.player-showcase, .guide-media, .hero-media');
