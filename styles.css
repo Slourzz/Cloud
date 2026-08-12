@@ -123,6 +123,57 @@
   .guide-media img{border-radius:9px}
 }
 
+/* Cherry Pink — synchronized lyrics guide. */
+body.cherry-guide{
+  --bg:#232136;
+  --panel:#2a273f;
+  --panel2:#312e49;
+  --ink:#e0def4;
+  --muted:#aaa6c2;
+  --accent:#ea9a97;
+  --accent2:#c4a7e7;
+  --line:rgba(224,222,244,.13);
+  background:#232136;
+  color:var(--ink)
+}
+.cherry-guide .top-navigation{border-bottom-color:rgba(87,82,121,.28);background:#faf4ed;color:#575279;box-shadow:0 2px 10px rgba(35,33,54,.08)}
+.cherry-guide .top-brand img{filter:brightness(0) saturate(100%) invert(48%) sepia(17%) saturate(735%) hue-rotate(309deg) brightness(101%) contrast(90%)}
+.cherry-guide .top-tabs a:not(.active){color:#797593}
+.cherry-guide .top-tabs a:hover{color:#575279}
+.cherry-guide .nav-selection{background:#d7827e}
+.cherry-guide .icon-link:hover,.cherry-guide .icon-link.active{background:#f2e9e1;color:#d7827e}
+.cherry-guide .profile-link img{border-color:rgba(87,82,121,.18);background:#f2e9e1}
+.cherry-guide .guide-back{color:#908caa}
+.cherry-guide .guide-back:hover{color:#ea9a97}
+.cherry-guide .guide-label{color:#ea9a97}
+.cherry-guide .guide-header{border-bottom-color:rgba(224,222,244,.13)}
+.cherry-guide .guide-header>p{color:#aaa6c2}
+.cherry-guide .guide-meta img{border-color:rgba(234,154,151,.34)}
+.cherry-guide .guide-meta small{color:#908caa}
+.cherry-guide .guide-intro-note{border-color:rgba(234,154,151,.25);border-left-color:#ea9a97;background:#2f2941}
+.cherry-guide .guide-intro-note strong{color:#ea9a97}
+.cherry-guide .guide-intro-note p{color:#b9b5ce}
+.cherry-guide .guide-step{border-color:rgba(224,222,244,.13);border-left-color:#ea9a97;background:#2a273f}
+.cherry-guide .guide-step:nth-of-type(even){border-left-color:#c4a7e7}
+.cherry-guide .step-number{color:#ea9a97}
+.cherry-guide .step-content>p,.cherry-guide .step-content ol{color:#aaa6c2}
+.cherry-guide .step-content a{color:#ea9a97;text-decoration-color:rgba(234,154,151,.45)}
+.cherry-guide .step-content code{background:#393552;color:#f6c8c5}
+.cherry-guide .step-content li::marker{color:#ea9a97}
+.cherry-guide .pending-tool{border-color:rgba(224,222,244,.18);background:#26233a;color:#aaa6c2}
+.cherry-guide .pending-tool small{background:#393552;color:#c4a7e7}
+.cherry-guide .guide-media{border-color:rgba(224,222,244,.14);background:#1f1d2e}
+.cherry-guide .guide-media img{background:#191724}
+.cherry-guide .guide-media figcaption{color:#908caa}
+@media(max-width:850px){
+  .cherry-guide .top-navigation{background:#faf4ed;color:#575279}
+  .cherry-guide .top-brand{border-right-color:rgba(87,82,121,.18)}
+  .cherry-guide .mobile-navigation{background:#faf4ed;color:#575279}
+  .cherry-guide .mobile-navigation-head,.cherry-guide .mobile-navigation-foot{border-color:rgba(87,82,121,.16)}
+  .cherry-guide .mobile-navigation nav a{border-bottom-color:rgba(87,82,121,.12)}
+  .cherry-guide .mobile-navigation-close{background:#f2e9e1;color:#575279}
+}
+
 /* Text-only navigation and strict responsive bounds. */
 html,body{max-width:100%;overflow-x:hidden}
 .cloud-logo{position:static;color:white}
