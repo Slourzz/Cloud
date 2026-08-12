@@ -59,6 +59,56 @@
   .mobile-menu,.nav-shade{display:none!important}
 }
 
+/* Cherry Pink — global website theme. */
+:root{
+  --bg:#232136;
+  --panel:#2a273f;
+  --panel2:#312e49;
+  --ink:#e0def4;
+  --muted:#aaa6c2;
+  --accent:#ea9a97;
+  --accent2:#c4a7e7;
+  --line:rgba(224,222,244,.13)
+}
+body{background:#232136;color:var(--ink)}
+.top-navigation{grid-template-columns:76px minmax(560px,1fr) 208px;border-bottom-color:rgba(87,82,121,.28);background:#faf4ed;color:#575279;box-shadow:0 2px 10px rgba(35,33,54,.08)}
+.top-brand img{filter:brightness(0) saturate(100%) invert(48%) sepia(17%) saturate(735%) hue-rotate(309deg) brightness(101%) contrast(90%)}
+.top-tabs a:not(.active){color:#797593}
+.top-tabs a:hover{color:#575279}
+.nav-selection{background:#d7827e}
+.top-actions{grid-template-columns:42px 42px 42px 50px;width:208px;gap:2px;padding:0 8px 0 0}
+.icon-link:hover,.icon-link.active{background:#f2e9e1;color:#d7827e}
+.profile-link img{border-color:rgba(87,82,121,.18);background:#f2e9e1}
+.button.primary{background:#ea9a97;color:#232136}
+.button.primary:hover{background:#f0b0ac}
+.button.secondary,.quick-links a,.info-card,.credit,.tool-row{background:#2a273f}
+.quick-links a:hover,.tool-row:hover{background:#312e49;border-color:rgba(234,154,151,.35)}
+.tool-row-disabled:hover{background:#2a273f;border-color:var(--line)}
+.tool-row-icon{background:#393552;color:#ea9a97}
+.tool-row:hover .tool-row-arrow{color:#ea9a97}
+.download-card{border-color:rgba(234,154,151,.25);background:#2a273f}
+.code-window{background:#1f1d2e}
+.stat{background:#2a273f}
+.prose code{background:#393552;color:#f6c8c5}
+.notice{background:#2f2941;color:#b9b5ce}
+.breadcrumb,.catalog-title small{color:#908caa}
+@media(max-width:1120px){
+  :root{--nav-height:58px}
+  .top-navigation{grid-template-columns:60px minmax(0,1fr) 54px}
+  .top-brand{border-right:1px solid rgba(87,82,121,.18)}
+  .top-tabs,.top-actions{display:none}
+  .mobile-current{display:block;text-align:center;font-size:14px;font-weight:700;letter-spacing:.01em}
+  .mobile-nav-trigger{display:grid;place-items:center;width:54px;height:58px;padding:0;border:0;background:transparent;color:#575279;cursor:pointer}
+  .mobile-nav-trigger svg{width:24px;height:24px}
+  .mobile-navigation{position:fixed;z-index:220;inset:0;display:flex;flex-direction:column;padding:18px clamp(20px,7vw,36px) 24px;background:#faf4ed;color:#575279;transform:translateX(-102%);visibility:hidden;transition:transform .35s cubic-bezier(.2,.8,.2,1),visibility .35s;overflow-y:auto}
+  .mobile-navigation-open{overflow:hidden}
+  .mobile-navigation-open .mobile-navigation{transform:none;visibility:visible}
+  .mobile-navigation-head,.mobile-navigation-foot{border-color:rgba(87,82,121,.16)}
+  .mobile-navigation-head img{filter:brightness(0) saturate(100%) invert(48%) sepia(17%) saturate(735%) hue-rotate(309deg) brightness(101%) contrast(90%)}
+  .mobile-navigation nav a{border-bottom-color:rgba(87,82,121,.12)}
+  .mobile-navigation-close{background:#f2e9e1;color:#575279}
+}
+
 /* Tools catalog and TTML guide. */
 .tools-page,.guide-page{width:min(100%,1040px);margin:0 auto}
 .tools-heading{padding:66px 0 40px}
@@ -209,3 +259,13 @@ html,body{max-width:100%;overflow-x:hidden}
   .download-meta{flex-wrap:wrap;gap:10px 18px}
   .repo-panel{grid-template-columns:1fr}
 }
+
+/* Keep catalogs and guide surfaces inside the global Cherry Pink palette. */
+.tools-heading p,.tool-row-copy small{color:#aaa6c2}
+.catalog-title small,.breadcrumb{color:#908caa}
+.tool-row{background:#2a273f;border-color:rgba(224,222,244,.13)}
+.tool-row:hover{background:#312e49;border-color:rgba(234,154,151,.35)}
+.tool-row-disabled:hover{background:#2a273f;border-color:rgba(224,222,244,.13)}
+.tool-row-icon{background:#393552;color:#ea9a97}
+.tool-row-arrow{color:#908caa}
+.tool-row:hover .tool-row-arrow{color:#ea9a97}
