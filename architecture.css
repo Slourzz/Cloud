@@ -54,7 +54,8 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 /* Scroll-driven hero: the brand is the only visible element at rest. */
 .home-hero-restructured.hero-scroll-sequence{--hero-copy-progress:0;--hero-details-progress:0;--hero-arrow-progress:0;--hero-logo-y:-50%;min-height:190vh;padding-bottom:0;transform:none!important;will-change:auto!important}
 .home-page{overflow:visible!important}
-.home-hero-restructured.hero-scroll-sequence .hero-copy{position:sticky;z-index:2;top:var(--nav-height,58px);left:auto;transform:none;min-height:calc(100vh - var(--nav-height,58px));justify-content:center;padding-bottom:5vh}
+.home-hero-restructured.hero-scroll-sequence .hero-copy{position:fixed;z-index:2;top:var(--nav-height,58px);left:50%;transform:translateX(-50%);min-height:calc(100vh - var(--nav-height,58px));justify-content:center;padding-bottom:5vh}
+.home-hero-restructured.hero-scroll-sequence.hero-sequence-past .hero-copy{position:absolute;top:auto;bottom:0;left:0;transform:none}
 .home-hero-restructured.hero-scroll-sequence .hero-brand-title{position:absolute;top:50%;left:50%;margin:0;transform:translate(-50%,var(--hero-logo-y));will-change:transform}
 .home-hero-restructured.hero-scroll-sequence .hero-tagline{position:absolute;top:58%;left:50%;width:min(92vw,1000px);margin:0;transform:translate(-50%,calc((1 - var(--hero-copy-progress))*34px))}
 .home-hero-restructured.hero-scroll-sequence .lead{position:absolute;top:67%;left:50%;width:min(90vw,700px);margin:0;transform:translate(-50%,calc((1 - var(--hero-details-progress))*30px))}
