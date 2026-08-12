@@ -53,6 +53,7 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 
 /* Scroll-driven hero: the brand is the only visible element at rest. */
 .home-hero-restructured.hero-scroll-sequence{--hero-copy-progress:0;--hero-details-progress:0;--hero-arrow-progress:0;min-height:165vh;padding-bottom:0}
+.home-page{overflow:visible!important}
 .home-hero-restructured.hero-scroll-sequence .hero-copy{position:sticky;top:var(--nav-height,58px);min-height:calc(100vh - var(--nav-height,58px));justify-content:center;padding-bottom:5vh}
 .home-hero-restructured.hero-scroll-sequence .hero-brand-title{position:absolute;top:clamp(-72px,-4vw,-34px);left:50%;margin:0;transform:translateX(-50%)}
 .home-hero-restructured.hero-scroll-sequence .hero-tagline{position:absolute;top:58%;left:50%;width:min(92vw,1000px);margin:0;transform:translate(-50%,calc((1 - var(--hero-copy-progress))*34px))}
