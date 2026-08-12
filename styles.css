@@ -234,6 +234,40 @@ html,body{max-width:100%;overflow-x:hidden}
 .cloud-logo svg{width:25px;height:25px}
 .side-navigation nav a>span,.side-footer span{display:grid;place-items:center}
 .home-page,.home-hero,.hero-copy{min-width:0}
+
+/* Premium motion pass: minimal navigation, restrained parallax and cards. */
+@view-transition{navigation:auto}
+::view-transition-old(root){animation:cloud-page-out .24s cubic-bezier(.4,0,1,1) both}
+::view-transition-new(root){animation:cloud-page-in .5s cubic-bezier(.22,1,.36,1) both}
+@keyframes cloud-page-out{to{opacity:0;transform:translateY(-7px)}}
+@keyframes cloud-page-in{from{opacity:0;transform:translateY(12px)}}
+
+.top-navigation{grid-template-columns:76px minmax(560px,1fr) 158px}
+.top-actions{grid-template-columns:42px 42px 50px;width:158px}
+.top-tabs a::before{content:"";position:absolute;inset:9px 7px;border-radius:12px;background:rgba(215,130,126,.09);opacity:0;transform:scale(.92);transition:opacity .24s,transform .34s cubic-bezier(.22,1,.36,1)}
+.top-tabs a:hover::before{opacity:1;transform:scale(1)}
+.top-tabs a{z-index:1}
+.top-tabs a>*{position:relative;z-index:1}
+
+.player-showcase{transform:translate3d(0,var(--parallax-y,0),0) perspective(1200px) rotateY(-3deg);will-change:transform}
+.guide-media img,.guide-media video,.hero-media img{transform:translate3d(0,var(--parallax-y,0),0);will-change:transform}
+
+.info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{
+  transition:transform .34s cubic-bezier(.22,1,.36,1),border-color .34s,box-shadow .34s,background-color .34s
+}
+.info-card:hover,.credit:hover,.guide-card:hover,.stat:hover,.download-card:hover{
+  transform:translateY(-5px);border-color:rgba(234,154,151,.32);box-shadow:0 20px 42px rgba(20,17,31,.16)
+}
+.quick-links a:hover,.tool-row:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(20,17,31,.13)}
+
+@media(max-width:1050px){.player-showcase{transform:translate3d(-50%,var(--parallax-y,0),0) scale(.88)}}
+@media(max-width:700px){.player-showcase{transform:translate3d(-50%,var(--parallax-y,0),0) scale(.52)}}
+@media(max-width:1120px){.top-navigation{grid-template-columns:60px minmax(0,1fr) 54px}}
+@media(prefers-reduced-motion:reduce){
+  ::view-transition-old(root),::view-transition-new(root){animation:none}
+  .player-showcase,.guide-media img,.guide-media video,.hero-media img{transform:none!important}
+  .info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{transition:none}
+}
 .home-page{overflow:hidden}
 @media(max-width:700px){
   .page{width:100%}

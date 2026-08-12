@@ -9,7 +9,6 @@ const iconPaths = {
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
   download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/>',
-  github: '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.3 4 5 5 0 0 0 19.2.5S18 0 15 2a13.4 13.4 0 0 0-7 0C5 .1 3.8.5 3.8.5A5 5 0 0 0 3.7 4a5.4 5.4 0 0 0-1.5 3.7c0 5.4 3.5 6.6 6.8 7A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/>',
   sparkles: '<path d="m12 3-1.9 5.1L5 10l5.1 1.9L12 17l1.9-5.1L19 10l-5.1-1.9Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/>',
   heart: '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 11 4 13 5 14l7 7Z"/>',
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 8.4 7.2 6.1 4.9a4 4 0 0 0 5 5l-7.8 7.8a2.1 2.1 0 0 0 3 3l7.8-7.8a4 4 0 0 0 5-5l-2.3 2.3-3.6-3.6Z"/>',
@@ -28,7 +27,7 @@ const activeLabel = pages.find(([id]) => id === active)?.[1] || utilityLabels[ac
 const activeIndex = pages.findIndex(([id]) => id === active);
 navigation.style.setProperty('--active-index', activeIndex);
 navigation.classList.toggle('home-active', activeIndex < 0);
-navigation.innerHTML = `<a class="top-brand" href="./index.html" aria-label="Cloud"><img src="./assets/cloud-logo.png" alt=""></a><nav class="top-tabs" aria-label="Secciones principales">${pages.map(([id,label,url]) => `<a href="${url}" data-nav-index="${pages.findIndex(([pageId]) => pageId === id)}" class="${active===id?'active':''}" ${active===id?'aria-current="page"':''}>${label}</a>`).join('')}<span class="nav-selection" aria-hidden="true"></span></nav><div class="top-actions"><a href="./guias.html" class="icon-link ${active==='guias'?'active':''}" aria-label="Guías" title="Guías">${icon('book')}</a><a href="./herramientas.html" class="icon-link ${active==='herramientas'?'active':''}" aria-label="Herramientas" title="Herramientas">${icon('wrench')}</a><a href="https://github.com/Slourzz/Cloud" class="icon-link" target="_blank" rel="noreferrer" aria-label="Repositorio en GitHub" title="GitHub">${icon('github')}</a><a href="https://github.com/Slourzz" class="profile-link" target="_blank" rel="noreferrer" aria-label="Perfil de Sam" title="Sam!"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"></a></div><span class="mobile-current">${activeLabel}</span><button class="mobile-nav-trigger" type="button" aria-label="Abrir navegación" aria-expanded="false">${icon('menu')}</button>`;
+navigation.innerHTML = `<a class="top-brand" href="./index.html" aria-label="Cloud"><img src="./assets/cloud-logo.png" alt=""></a><nav class="top-tabs" aria-label="Secciones principales">${pages.map(([id,label,url]) => `<a href="${url}" data-nav-index="${pages.findIndex(([pageId]) => pageId === id)}" class="${active===id?'active':''}" ${active===id?'aria-current="page"':''}>${label}</a>`).join('')}<span class="nav-selection" aria-hidden="true"></span></nav><div class="top-actions"><a href="./guias.html" class="icon-link ${active==='guias'?'active':''}" aria-label="Guías" title="Guías">${icon('book')}</a><a href="./herramientas.html" class="icon-link ${active==='herramientas'?'active':''}" aria-label="Herramientas" title="Herramientas">${icon('wrench')}</a><a href="https://github.com/Slourzz" class="profile-link" target="_blank" rel="noreferrer" aria-label="Perfil de Sam" title="Sam!"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"></a></div><span class="mobile-current">${activeLabel}</span><button class="mobile-nav-trigger" type="button" aria-label="Abrir navegación" aria-expanded="false">${icon('menu')}</button>`;
 shell.prepend(navigation);
 
 navigation.querySelectorAll('.top-tabs a').forEach(link => {
@@ -46,7 +45,7 @@ navigation.querySelectorAll('.top-tabs a').forEach(link => {
 const mobileNavigation = document.createElement('aside');
 mobileNavigation.className = 'mobile-navigation';
 mobileNavigation.setAttribute('aria-hidden', 'true');
-mobileNavigation.innerHTML = `<div class="mobile-navigation-head"><a href="./index.html"><img src="./assets/cloud-logo.png" alt=""><b>Cloud</b></a><button type="button" class="mobile-navigation-close" aria-label="Cerrar navegación">${icon('close')}</button></div><nav aria-label="Navegación móvil">${pages.map(([id,label,url], index) => `<a href="${url}" class="${active===id?'active':''}"><span>${String(index + 1).padStart(2,'0')}</span>${label}</a>`).join('')}<a href="./licencia.html" class="${active==='licencia'?'active':''}"><span>05</span>Licencia</a><a href="./repositorio.html" class="${active==='repositorio'?'active':''}"><span>06</span>Repositorio</a><a href="./guias.html" class="${active==='guias'?'active':''}"><span>07</span>Guías</a><a href="./herramientas.html" class="${active==='herramientas'?'active':''}"><span>08</span>Herramientas</a></nav><div class="mobile-navigation-foot"><a href="https://github.com/Slourzz/Cloud" target="_blank" rel="noreferrer">${icon('github')}<span>GitHub</span></a><a href="https://github.com/Slourzz" target="_blank" rel="noreferrer"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"><span>Sam!</span></a></div>`;
+mobileNavigation.innerHTML = `<div class="mobile-navigation-head"><a href="./index.html"><img src="./assets/cloud-logo.png" alt=""><b>Cloud</b></a><button type="button" class="mobile-navigation-close" aria-label="Cerrar navegación">${icon('close')}</button></div><nav aria-label="Navegación móvil">${pages.map(([id,label,url], index) => `<a href="${url}" class="${active===id?'active':''}"><span>${String(index + 1).padStart(2,'0')}</span>${label}</a>`).join('')}<a href="./licencia.html" class="${active==='licencia'?'active':''}"><span>05</span>Licencia</a><a href="./repositorio.html" class="${active==='repositorio'?'active':''}"><span>06</span>Repositorio</a><a href="./guias.html" class="${active==='guias'?'active':''}"><span>07</span>Guías</a><a href="./herramientas.html" class="${active==='herramientas'?'active':''}"><span>08</span>Herramientas</a></nav><div class="mobile-navigation-foot"><a href="./repositorio.html"><span>Repositorio</span></a><a href="https://github.com/Slourzz" target="_blank" rel="noreferrer"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"><span>Sam!</span></a></div>`;
 document.body.append(mobileNavigation);
 
 const mobileNavTrigger = navigation.querySelector('.mobile-nav-trigger');
@@ -71,3 +70,23 @@ navigation.querySelectorAll('a').forEach(link => link.addEventListener('click', 
 
 const observer = new IntersectionObserver(entries => entries.forEach(entry => { if(entry.isIntersecting){ entry.target.classList.add('visible'); observer.unobserve(entry.target); } }), {threshold:.1});
 document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
+
+const parallaxItems = [...document.querySelectorAll('.player-showcase, .guide-media img, .guide-media video, .hero-media img')];
+let parallaxFrame = 0;
+const updateParallax = () => {
+  parallaxFrame = 0;
+  const viewportCenter = window.innerHeight / 2;
+  parallaxItems.forEach(element => {
+    const rect = element.getBoundingClientRect();
+    const distance = (rect.top + rect.height / 2 - viewportCenter) / window.innerHeight;
+    element.style.setProperty('--parallax-y', `${Math.max(-14, Math.min(14, distance * -18)).toFixed(2)}px`);
+  });
+};
+const requestParallax = () => {
+  if (!parallaxFrame) parallaxFrame = requestAnimationFrame(updateParallax);
+};
+if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  window.addEventListener('scroll', requestParallax, {passive:true});
+  window.addEventListener('resize', requestParallax);
+  requestParallax();
+}
