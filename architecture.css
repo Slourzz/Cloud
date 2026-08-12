@@ -72,3 +72,9 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 @media(max-width:560px){.home-hero-restructured.hero-scroll-sequence .hero-tagline{top:48%}.home-hero-restructured.hero-scroll-sequence .lead{top:60%}.home-hero-restructured.hero-scroll-sequence .micro{top:76%;padding:0 18px}}
 
 html,body,.home-page,.product-story,.cloud-introduction,.themes-showcase{background-color:var(--cherry-bg)!important;background-image:none!important}
+
+/* Compact the handoff from the scroll hero into the product story. */
+.home-hero-restructured.hero-scroll-sequence{min-height:150vh}
+.home-page{gap:36px}
+.product-story{padding-top:54px}
+@media(max-width:900px){.home-hero-restructured.hero-scroll-sequence{min-height:145vh}.home-page{gap:24px}.product-story{padding-top:42px}}
