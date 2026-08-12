@@ -40,3 +40,8 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 .home-hero-restructured .player-showcase{display:none}
 @media(max-width:900px){.home-hero-restructured{padding-top:0}.home-hero-restructured .hero-brand-title{transform:translateY(-30px)}}
 @media(max-width:560px){.home-hero-restructured{padding-top:0}.home-hero-restructured .hero-brand-title{transform:translateY(-20px)}}
+
+/* Pull the copy into the transparent lower area of the source wordmark. */
+.home-hero-restructured .hero-tagline{margin-top:-128px}
+@media(max-width:900px){.home-hero-restructured .hero-tagline{margin-top:-96px}}
+@media(max-width:560px){.home-hero-restructured .hero-tagline{margin-top:-58px}}
