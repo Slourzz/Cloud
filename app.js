@@ -74,7 +74,8 @@ document.querySelectorAll('.cards, .credit-list, .quick-links').forEach(group =>
   [...group.children].forEach((item, index) => item.style.setProperty('--stagger-delay', `${Math.min(index, 7) * 70}ms`));
 });
 
-const parallaxItems = [...document.querySelectorAll('.player-showcase, .guide-media, .hero-media, .page-header, .content-section, .home-hero, .intro-grid')];
+const parallaxItems = [...document.querySelectorAll('.player-showcase, .page-header, .content-section, .home-hero, .intro-grid')];
+const scrollMediaItems = [...document.querySelectorAll('.guide-media img, .guide-media video, .hero-media img')];
 parallaxItems.forEach((element, index) => {
   const isMedia = element.matches('.player-showcase, .guide-media, .hero-media');
   element.dataset.parallaxDepth = isMedia ? '1' : String(.34 + (index % 3) * .14);
@@ -89,6 +90,17 @@ const updateParallax = () => {
     const depth = Number(element.dataset.parallaxDepth || 1);
     const offset = Math.max(-58, Math.min(58, distance * -76 * depth));
     element.style.setProperty('--parallax-y', `${offset.toFixed(2)}px`);
+  });
+  scrollMediaItems.forEach(element => {
+    const rect = element.parentElement.getBoundingClientRect();
+    const progress = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / (window.innerHeight + rect.height)));
+    const centered = Math.sin(progress * Math.PI);
+    const translateY = 86 - progress * 172;
+    const scale = 1.2 - centered * .15;
+    const cropY = 11 - centered * 11;
+    const cropX = 6 - centered * 6;
+    element.style.transform = `translate3d(0, ${translateY.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
+    element.style.clipPath = `inset(${cropY.toFixed(2)}% ${cropX.toFixed(2)}% round ${(12 + (1 - centered) * 10).toFixed(2)}px)`;
   });
 };
 const requestParallax = () => {

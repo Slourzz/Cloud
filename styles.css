@@ -256,21 +256,8 @@ html,body{max-width:100%;overflow-x:hidden}
 .guide-media,.hero-media,.page-header,.content-section,.home-hero,.intro-grid{transform:translate3d(0,var(--parallax-y,0),0);will-change:transform}
 .guide-media img,.guide-media video,.hero-media img{transform:none}
 
-/* Parallax 2: media progress is driven directly by its position in the viewport. */
-@supports (animation-timeline:view()){
-  @keyframes cloud-scroll-media{
-    0%{transform:translate3d(0,44px,0) scale(1.11);clip-path:inset(8% 5% 8% 5% round 18px)}
-    45%{transform:translate3d(0,0,0) scale(1.025);clip-path:inset(0 round 11px)}
-    100%{transform:translate3d(0,-44px,0) scale(1.11);clip-path:inset(8% 5% 8% 5% round 18px)}
-  }
-  .guide-media img,.guide-media video,.hero-media img{
-    animation:cloud-scroll-media linear both;
-    animation-timeline:view(block);
-    animation-range:entry 0% exit 100%;
-    transform-origin:center;
-    will-change:transform,clip-path
-  }
-}
+/* Parallax 2: position, scale and crop follow the exact scroll progress. */
+.guide-media img,.guide-media video,.hero-media img{transform-origin:center;will-change:transform,clip-path}
 
 .info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{
   position:relative;overflow:hidden;
