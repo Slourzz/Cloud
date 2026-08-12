@@ -28,3 +28,8 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 .home-hero-restructured .hero-brand-title{width:min(94vw,940px);margin:0;line-height:1}.hero-brand-mark{display:block;width:100%;aspect-ratio:16/9;background:linear-gradient(120deg,#f6c0bd 0%,#ea9a97 42%,#c87ca8 76%,#c4a7e7 100%);-webkit-mask:url('./assets/cloud-name-mask.png?v=1') center/contain no-repeat;mask:url('./assets/cloud-name-mask.png?v=1') center/contain no-repeat;filter:drop-shadow(0 18px 40px #ea9a9720)}.hero-tagline{margin:-8px 0 0;color:var(--cherry-text);font:800 clamp(1.3rem,2.25vw,2.25rem)/1.2 "M PLUS 1p",sans-serif;letter-spacing:-.035em}.home-hero-restructured .hero-tagline+.lead{margin-top:18px}
 @media(max-width:900px){.home-hero-restructured .hero-brand-title{width:min(100%,760px)}.hero-tagline{margin-top:-2px}}
 @media(max-width:560px){.home-hero-restructured .hero-brand-title{width:112%;max-width:none}.hero-brand-mark{aspect-ratio:16/8.6}.hero-tagline{max-width:330px;font-size:1.35rem;margin-top:-8px}}
+
+/* Keep the brand visible sooner without changing its size or the story below. */
+.home-hero-restructured{padding-top:clamp(28px,4vw,58px)}
+@media(max-width:900px){.home-hero-restructured{padding-top:30px}}
+@media(max-width:560px){.home-hero-restructured{padding-top:22px}}
