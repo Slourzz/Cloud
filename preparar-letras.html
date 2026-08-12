@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#232136">
+  <title>Preparar letras — Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./lyrics-tool.css?v=1">
+</head>
+<body>
+  <main class="lyrics-tool-shell">
+    <a class="tool-back" href="./herramientas.html" aria-label="Volver a Herramientas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      Volver a Herramientas
+    </a>
+
+    <header class="tool-header">
+      <span class="tool-eyebrow">Cloud Tools</span>
+      <h1>Preparar letras</h1>
+      <p>Busca letras en LRCLIB o pega las tuyas y prepara texto limpio para crear archivos TTML.</p>
+    </header>
+
+    <section class="search-surface" aria-labelledby="search-title">
+      <h2 id="search-title" class="sr-only">Buscar letras</h2>
+      <form id="lyrics-search-form" class="search-form">
+        <label class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+          <input id="lyrics-query" type="search" autocomplete="off" placeholder="Canción, artista o álbum" aria-label="Canción, artista o álbum">
+        </label>
+        <button id="search-button" type="submit">Buscar letras</button>
+      </form>
+      <div id="search-feedback" class="search-feedback" role="status" aria-live="polite"></div>
+      <div id="search-results" class="search-results" aria-label="Resultados de LRCLIB"></div>
+    </section>
+
+    <section class="settings-surface" aria-labelledby="settings-title">
+      <div class="surface-heading">
+        <div><span>Procesamiento</span><small>Los cambios se reflejan al instante</small></div>
+        <button id="reset-settings" class="text-button" type="button">Restablecer</button>
+      </div>
+      <h2 id="settings-title" class="sr-only">Opciones de procesamiento</h2>
+      <div class="settings-grid">
+        <label class="setting-card">
+          <span><strong>Quitar tiempos</strong><small>Elimina marcas como [01:24.30] y etiquetas LRC.</small></span>
+          <input type="checkbox" data-setting="removeTimestamps" checked><i aria-hidden="true"></i>
+        </label>
+        <label class="setting-card">
+          <span><strong>Procesar guiones</strong><small>Normaliza separadores y palabras interrumpidas.</small></span>
+          <input type="checkbox" data-setting="processDashes" checked><i aria-hidden="true"></i>
+        </label>
+        <label class="setting-card">
+          <span><strong>Separar voces de fondo</strong><small>Mueve cada texto entre paréntesis a su propia línea.</small></span>
+          <input type="checkbox" data-setting="splitBackground"><i aria-hidden="true"></i>
+        </label>
+        <label class="setting-card">
+          <span><strong>Separar palabras</strong><small>Añade los separadores necesarios para importar el texto.</small></span>
+          <input type="checkbox" data-setting="splitWords" checked><i aria-hidden="true"></i>
+        </label>
+        <label class="setting-card">
+          <span><strong>Separar caracteres CJK</strong><small>Divide caracteres chinos, japoneses y coreanos.</small></span>
+          <input type="checkbox" data-setting="splitCjk"><i aria-hidden="true"></i>
+        </label>
+        <label class="setting-card">
+          <span><strong>Quitar líneas vacías</strong><small>Elimina los espacios sin letra del resultado final.</small></span>
+          <input type="checkbox" data-setting="removeEmpty"><i aria-hidden="true"></i>
+        </label>
+      </div>
+    </section>
+
+    <section class="editor-grid" aria-label="Preparador de letras">
+      <article class="editor-card">
+        <div class="surface-heading">
+          <div><span>Entrada</span><small id="source-label">Pega una letra o busca una canción</small></div>
+          <button id="clear-input" class="text-button" type="button">Limpiar</button>
+        </div>
+        <textarea id="lyrics-input" spellcheck="false" placeholder="Escribe o pega aquí la letra de la canción…"></textarea>
+      </article>
+      <article class="editor-card output-card">
+        <div class="surface-heading">
+          <div><span>Resultado</span><small id="output-summary">0 líneas preparadas</small></div>
+          <button id="copy-output" class="copy-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copiar</span>
+          </button>
+        </div>
+        <textarea id="lyrics-output" readonly spellcheck="false" placeholder="El resultado aparecerá aquí…"></textarea>
+      </article>
+    </section>
+
+    <footer class="tool-footer">
+      Letras proporcionadas por <a href="https://lrclib.net" target="_blank" rel="noreferrer">LRCLIB</a>. Cloud no almacena tus búsquedas.
+    </footer>
+  </main>
+  <script src="./lyrics-tool.js?v=1"></script>
+</body>
+</html>
