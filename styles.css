@@ -259,13 +259,15 @@ html,body{max-width:100%;overflow-x:hidden}
   transform:translateY(-5px);border-color:rgba(234,154,151,.32);box-shadow:0 20px 42px rgba(20,17,31,.16)
 }
 .quick-links a:hover,.tool-row:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(20,17,31,.13)}
+.tool-row-disabled:hover{transform:none;box-shadow:none}
 
 @media(max-width:1050px){.player-showcase{transform:translate3d(-50%,var(--parallax-y,0),0) scale(.88)}}
 @media(max-width:700px){.player-showcase{transform:translate3d(-50%,var(--parallax-y,0),0) scale(.52)}}
 @media(max-width:1120px){.top-navigation{grid-template-columns:60px minmax(0,1fr) 54px}}
 @media(prefers-reduced-motion:reduce){
   ::view-transition-old(root),::view-transition-new(root){animation:none}
-  .player-showcase,.guide-media img,.guide-media video,.hero-media img{transform:none!important}
+  .player-showcase{--parallax-y:0px}
+  .guide-media img,.guide-media video,.hero-media img{transform:none!important}
   .info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{transition:none}
 }
 .home-page{overflow:hidden}
