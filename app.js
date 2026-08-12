@@ -110,11 +110,9 @@ const updateParallax = () => {
 const requestParallax = () => {
   if (!parallaxFrame) parallaxFrame = requestAnimationFrame(updateParallax);
 };
-if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  window.addEventListener('scroll', requestParallax, {passive:true});
-  window.addEventListener('resize', requestParallax);
-  requestParallax();
-}
+window.addEventListener('scroll', requestParallax, {passive:true});
+window.addEventListener('resize', requestParallax);
+requestParallax();
 
 const motionCards = document.querySelectorAll('.info-card, .credit, .guide-card, .stat, .download-card');
 motionCards.forEach(card => {

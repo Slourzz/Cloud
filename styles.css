@@ -279,10 +279,9 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(prefers-reduced-motion:reduce){
   ::view-transition-old(root),::view-transition-new(root){animation:none}
   .player-showcase{--parallax-y:0px}
-  .guide-media,.hero-media,.page-header,.content-section,.home-hero,.intro-grid{transform:none!important}
+  .page-header,.content-section,.home-hero,.intro-grid{transform:none!important}
   .info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{transition:none}
   .reveal.visible .info-card,.reveal.visible .credit,.reveal.visible .guide-card{animation:none}
-  .guide-media img,.guide-media video,.hero-media img{animation:none!important;clip-path:none!important;transform:none!important}
 }
 .home-page{overflow:hidden}
 @media(max-width:700px){
