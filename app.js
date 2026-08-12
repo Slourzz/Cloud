@@ -91,9 +91,13 @@ const updateParallax = () => {
     const offset = Math.max(-58, Math.min(58, distance * -76 * depth));
     element.style.setProperty('--parallax-y', `${offset.toFixed(2)}px`);
   });
-  scrollMediaItems.forEach(element => {
-    const rect = element.parentElement.getBoundingClientRect();
-    const progress = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / (window.innerHeight + rect.height)));
+  const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  const documentProgress = window.scrollY / maxScroll;
+  scrollMediaItems.forEach((element, index) => {
+    const spread = scrollMediaItems.length > 1 ? index / (scrollMediaItems.length - 1) : .5;
+    const localStart = Math.max(0, spread * .34 - .12);
+    const localEnd = Math.min(1, localStart + .78);
+    const progress = Math.max(0, Math.min(1, (documentProgress - localStart) / Math.max(.01, localEnd - localStart)));
     const centered = Math.sin(progress * Math.PI);
     const translateY = 86 - progress * 172;
     const scale = 1.2 - centered * .15;
