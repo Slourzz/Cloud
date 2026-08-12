@@ -110,7 +110,9 @@ document.querySelectorAll('.cards, .credit-list, .quick-links').forEach(group =>
 });
 
 const parallaxItems = [...document.querySelectorAll('.player-showcase, .page-header, .content-section, .home-hero, .intro-grid')].filter(element => element !== scrollHero);
-const scrollMediaItems = [...document.querySelectorAll('.guide-media img, .guide-media video, .hero-media img')];
+// Los recursos de las guías deben conservar su encuadre durante todo el scroll.
+// El movimiento vinculado al desplazamiento queda reservado para los heroes.
+const scrollMediaItems = [...document.querySelectorAll('.hero-media img')];
 parallaxItems.forEach((element, index) => {
   const isMedia = element.matches('.player-showcase, .guide-media, .hero-media');
   element.dataset.parallaxDepth = isMedia ? '1' : String(.34 + (index % 3) * .14);

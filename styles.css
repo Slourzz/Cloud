@@ -218,6 +218,7 @@ body.cherry-guide{
 .cherry-guide .guide-media{border-color:rgba(224,222,244,.14);background:#1f1d2e}
 .cherry-guide .guide-media img{background:#191724}
 .cherry-guide .guide-media figcaption{color:#908caa}
+.cherry-guide .guide-media,.cherry-guide .guide-media img,.cherry-guide .guide-media video{transform:none!important;translate:none!important;scale:1!important;animation:none!important;will-change:auto!important}
 @media(max-width:850px){
   .cherry-guide .top-navigation{background:#faf4ed;color:#575279}
   .cherry-guide .top-brand{border-right-color:rgba(87,82,121,.18)}
