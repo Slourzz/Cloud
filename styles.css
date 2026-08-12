@@ -156,10 +156,12 @@ body{background:#232136;color:var(--ink)}
 .step-content ul{margin:20px 0 0;padding-left:22px;color:#b9b1c3;font-size:13px;line-height:1.8}
 .step-content li::marker{color:var(--accent);font-weight:800}
 .guide-keybinds{margin-top:22px;display:grid;gap:9px}
-.guide-keybinds>div{min-height:54px;padding:11px 14px;display:grid;grid-template-columns:42px 42px 1fr;gap:8px;align-items:center;border:1px solid rgba(224,222,244,.12);border-radius:12px;background:rgba(255,255,255,.025);color:#bbb4c5;font-size:13px;line-height:1.45}
-.guide-keybinds>div kbd:only-of-type{grid-column:1/3}
-.guide-keybinds kbd{min-width:36px;padding:7px 8px;border:1px solid rgba(234,154,151,.3);border-bottom-color:rgba(234,154,151,.55);border-radius:8px;background:#181621;color:#f3eaf4;font:700 12px Inter,sans-serif;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.28)}
-.guide-keybinds span{grid-column:3}
+.guide-keybinds>div{min-height:54px;padding:11px 14px;display:grid;grid-template-columns:116px minmax(0,1fr);gap:14px;align-items:center;border:1px solid rgba(224,222,244,.12);border-radius:12px;background:rgba(255,255,255,.025);color:#bbb4c5;font-size:13px;line-height:1.45}
+.guide-keybinds .key-group{display:flex;align-items:center;gap:7px;color:#8c8597}
+.guide-keybinds .key-group i{font-style:normal}
+.guide-keybinds kbd{display:inline-flex!important;align-items:center;justify-content:center;min-width:34px;min-height:30px;padding:5px 9px;box-sizing:border-box;border:1px solid rgba(234,154,151,.38);border-bottom:2px solid rgba(234,154,151,.62);border-radius:7px;background-color:#181621!important;color:#fff!important;-webkit-text-fill-color:#fff;font-family:Inter,Arial,sans-serif;font-size:13px;font-weight:800;line-height:1;text-align:center;opacity:1;box-shadow:0 2px 0 rgba(0,0,0,.28)}
+.guide-media-compact{max-width:640px}
+.guide-media-compact img{aspect-ratio:auto;object-fit:contain}
 .pending-tool{margin-top:20px;padding:15px 17px;display:flex;align-items:center;justify-content:space-between;border:1px dashed rgba(255,255,255,.14);border-radius:13px;color:#a69fac;font-size:12px;text-decoration:none;transition:transform .2s ease,border-color .2s ease,background-color .2s ease}
 .pending-tool:hover{transform:translateY(-2px);border-color:rgba(234,154,151,.55);background:rgba(234,154,151,.07)}
 .pending-tool small{padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.06);color:#7e7789;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
@@ -180,7 +182,7 @@ body{background:#232136;color:var(--ink)}
   .step-content h2{font-size:25px}
   .guide-media{margin-top:22px;padding:5px;border-radius:13px}
   .guide-media img{border-radius:9px}
-  .guide-keybinds>div{grid-template-columns:36px 36px 1fr;padding:10px}
+  .guide-keybinds>div{grid-template-columns:94px minmax(0,1fr);padding:10px}
 }
 
 /* Cherry Pink — synchronized lyrics guide. */
