@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080611">
+  <title>Guía para crear letras sincronizadas — Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=3">
+</head>
+<body data-page="herramientas">
+  <div id="site-shell">
+    <main class="page guide-page">
+      <a class="guide-back reveal" href="./herramientas.html" aria-label="Volver a Herramientas">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        Volver a Herramientas
+      </a>
+
+      <article class="guide-article reveal">
+        <header class="guide-header">
+          <span class="guide-label">Guía de Cloud</span>
+          <h1>Guía para crear letras sincronizadas para Cloud</h1>
+          <p>En esta guía podrás aprender cómo sincronizar las letras de las canciones de manera muy fácil.</p>
+          <div class="guide-meta">
+            <img src="https://github.com/Slourzz.png?size=96" alt="Foto de perfil de Sam!">
+            <span><b>Creada por Sam!</b><small>Última edición: 11 de agosto de 2026</small></span>
+          </div>
+        </header>
+
+        <div class="guide-intro-note">
+          <strong>Antes de comenzar</strong>
+          <p>Necesitarás el audio de la canción, sus letras y la herramienta AMll TTML. El proceso se realiza desde tu navegador y los archivos permanecen en tu equipo.</p>
+        </div>
+
+        <section class="guide-step">
+          <span class="step-number">01</span>
+          <div class="step-content">
+            <h2>Descarga la canción</h2>
+            <p>Copia el enlace de la canción desde una plataforma musical. Recomendamos Spotify porque permite encontrarla fácilmente. Después, abre <a href="https://spotidown.app/en4" target="_blank" rel="noreferrer">SpotiDown</a>, pega el enlace y descarga la canción.</p>
+          </div>
+        </section>
+
+        <section class="guide-step">
+          <span class="step-number">02</span>
+          <div class="step-content">
+            <h2>Obtén las letras</h2>
+            <p>Pega el enlace de la canción en la herramienta de preparación de letras y copia el texto generado con los separadores <code>/</code>.</p>
+            <div class="pending-tool"><span>Herramienta de preparación</span><small>Próximamente</small></div>
+          </div>
+        </section>
+
+        <section class="guide-step">
+          <span class="step-number">03</span>
+          <div class="step-content">
+            <h2>Importa las letras</h2>
+            <p>Abre <a href="https://amll-ttml-tool.stevexmh.net" target="_blank" rel="noreferrer">AMll TTML Tool</a> y sigue estos pasos:</p>
+            <ol>
+              <li>Dirígete al botón <b>Archivo</b>.</li>
+              <li>Selecciona <b>Importar letras</b>.</li>
+              <li>Elige <b>Importar desde texto plano</b>.</li>
+              <li>Pega las letras generadas y pulsa <b>Importar</b>.</li>
+            </ol>
+            <figure class="guide-media">
+              <img src="./assets/gif1.gif" alt="Demostración de cómo importar letras desde texto plano en AMll TTML Tool">
+              <figcaption>Importación de letras desde texto plano.</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section class="guide-step">
+          <span class="step-number">04</span>
+          <div class="step-content">
+            <h2>Importa la música</h2>
+            <p>Una vez importadas las letras, haz clic en el botón de nota musical ubicado en la esquina inferior izquierda y selecciona el archivo de música que descargaste.</p>
+            <figure class="guide-media">
+              <img src="./assets/gif2.gif" alt="Demostración de cómo importar el archivo de música en AMll TTML Tool">
+              <figcaption>Selección del audio para comenzar la sincronización.</figcaption>
+            </figure>
+          </div>
+        </section>
+      </article>
+    </main>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
