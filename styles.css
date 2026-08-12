@@ -244,15 +244,17 @@ html,body{max-width:100%;overflow-x:hidden}
 
 .top-navigation{grid-template-columns:76px minmax(560px,1fr) 158px}
 .top-actions{grid-template-columns:42px 42px 50px;width:158px}
-.top-tabs a::before{content:"";position:absolute;inset:9px 7px;border-radius:12px;background:rgba(215,130,126,.09);opacity:0;transform:scale(.92);transition:opacity .24s,transform .34s cubic-bezier(.22,1,.36,1)}
+.top-tabs{isolation:isolate;padding:7px}
+.top-tabs a::before{content:"";position:absolute;inset:5px 8px;border-radius:12px;background:rgba(215,130,126,.09);opacity:0;transform:scale(.92);transition:opacity .24s,transform .34s cubic-bezier(.22,1,.36,1)}
 .top-tabs a:hover::before{opacity:1;transform:scale(1)}
-.top-tabs a.active::before{opacity:1;transform:scale(1);background:rgba(215,130,126,.14)}
-.top-tabs a{z-index:1}
+.top-tabs a{z-index:2}
 .top-tabs a>*{position:relative;z-index:1}
+.nav-selection{z-index:1;left:calc((100% / 4) * var(--active-index) + 7px);bottom:7px;width:calc(25% - 14px);height:calc(100% - 14px);border-radius:13px;background:#f0e4e1;box-shadow:inset 0 0 0 1px rgba(215,130,126,.13),0 3px 10px rgba(87,82,121,.07);transition:left .42s cubic-bezier(.22,1,.36,1),width .42s cubic-bezier(.22,1,.36,1),opacity .2s}
+.top-tabs a.active{color:#d7827e}
 
 .player-showcase{transform:translate3d(0,var(--parallax-y,0),0) perspective(1200px) rotateY(-3deg);will-change:transform}
-.guide-media img,.guide-media video,.hero-media img{transform:translate3d(0,var(--parallax-y,0),0);will-change:transform}
-.page-header,.intro-grid{transform:translate3d(0,var(--parallax-y,0),0);will-change:transform}
+.guide-media,.hero-media,.page-header,.content-section,.home-hero,.intro-grid{transform:translate3d(0,var(--parallax-y,0),0);will-change:transform}
+.guide-media img,.guide-media video,.hero-media img{transform:none}
 
 .info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{
   position:relative;overflow:hidden;
@@ -274,7 +276,7 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(prefers-reduced-motion:reduce){
   ::view-transition-old(root),::view-transition-new(root){animation:none}
   .player-showcase{--parallax-y:0px}
-  .guide-media img,.guide-media video,.hero-media img,.page-header,.intro-grid{transform:none!important}
+  .guide-media,.hero-media,.page-header,.content-section,.home-hero,.intro-grid{transform:none!important}
   .info-card,.credit,.quick-links a,.tool-row,.guide-card,.stat,.download-card{transition:none}
   .reveal.visible .info-card,.reveal.visible .credit,.reveal.visible .guide-card{animation:none}
 }

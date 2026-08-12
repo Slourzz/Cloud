@@ -74,7 +74,11 @@ document.querySelectorAll('.cards, .credit-list, .quick-links').forEach(group =>
   [...group.children].forEach((item, index) => item.style.setProperty('--stagger-delay', `${Math.min(index, 7) * 70}ms`));
 });
 
-const parallaxItems = [...document.querySelectorAll('.player-showcase, .guide-media img, .guide-media video, .hero-media img, .page-header, .intro-grid')];
+const parallaxItems = [...document.querySelectorAll('.player-showcase, .guide-media, .hero-media, .page-header, .content-section, .home-hero, .intro-grid')];
+parallaxItems.forEach((element, index) => {
+  const isMedia = element.matches('.player-showcase, .guide-media, .hero-media');
+  element.dataset.parallaxDepth = isMedia ? '1' : String(.34 + (index % 3) * .14);
+});
 let parallaxFrame = 0;
 const updateParallax = () => {
   parallaxFrame = 0;
@@ -82,8 +86,9 @@ const updateParallax = () => {
   parallaxItems.forEach(element => {
     const rect = element.getBoundingClientRect();
     const distance = (rect.top + rect.height / 2 - viewportCenter) / window.innerHeight;
-    const strength = element.matches('.page-header, .intro-grid') ? -34 : -22;
-    element.style.setProperty('--parallax-y', `${Math.max(-24, Math.min(24, distance * strength)).toFixed(2)}px`);
+    const depth = Number(element.dataset.parallaxDepth || 1);
+    const offset = Math.max(-58, Math.min(58, distance * -76 * depth));
+    element.style.setProperty('--parallax-y', `${offset.toFixed(2)}px`);
   });
 };
 const requestParallax = () => {
