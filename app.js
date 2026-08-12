@@ -129,3 +129,46 @@ motionCards.forEach(card => {
     card.style.removeProperty('--card-ry');
   });
 });
+
+const catalog = document.querySelector('[data-catalog]');
+if (catalog) {
+  const catalogItems = [...catalog.querySelectorAll('[data-category]')];
+  const catalogSearch = document.querySelector('[data-catalog-search]');
+  const catalogFilters = [...document.querySelectorAll('[data-catalog-filter]')];
+  const catalogEmpty = document.querySelector('[data-catalog-empty]');
+  let selectedCategory = 'all';
+  const updateCatalog = () => {
+    const query = (catalogSearch?.value || '').trim().toLocaleLowerCase('es');
+    let visible = 0;
+    catalogItems.forEach(item => {
+      const matchesCategory = selectedCategory === 'all' || item.dataset.category === selectedCategory;
+      const haystack = `${item.dataset.search || ''} ${item.textContent}`.toLocaleLowerCase('es');
+      const matchesSearch = !query || haystack.includes(query);
+      const show = matchesCategory && matchesSearch;
+      item.hidden = !show;
+      if (show) visible += 1;
+    });
+    if (catalogEmpty) catalogEmpty.style.display = visible ? 'none' : 'block';
+  };
+  catalogSearch?.addEventListener('input', updateCatalog);
+  catalogFilters.forEach(filter => filter.addEventListener('click', () => {
+    selectedCategory = filter.dataset.catalogFilter || 'all';
+    catalogFilters.forEach(item => item.classList.toggle('active', item === filter));
+    updateCatalog();
+  }));
+}
+
+const guideProgress = document.querySelector('.guide-progress');
+const guideSections = [...document.querySelectorAll('.guide-step[id], .guide-callout[id]')];
+const guideLinks = [...document.querySelectorAll('.guide-toc a')];
+if (guideProgress) {
+  const updateGuideProgress = () => {
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    document.documentElement.style.setProperty('--guide-progress', `${Math.min(100, window.scrollY / maxScroll * 100)}%`);
+    let current = guideSections[0]?.id;
+    guideSections.forEach(section => { if (section.getBoundingClientRect().top <= 190) current = section.id; });
+    guideLinks.forEach(link => link.classList.toggle('active', link.hash === `#${current}`));
+  };
+  window.addEventListener('scroll', updateGuideProgress, {passive:true});
+  updateGuideProgress();
+}
