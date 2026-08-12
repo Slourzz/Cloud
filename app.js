@@ -4,6 +4,10 @@ const pages = [
   ['descarga','Descarga','./descarga.html'],
   ['agradecimientos','Agradecimientos','./agradecimientos.html']
 ];
+const CLOUD_API_BASE = 'https://cloud-production-4b12.up.railway.app';
+const DISCORD_SESSION_KEY = 'cloud-website-discord-session-v1';
+const VISITOR_ID_KEY = 'cloud-website-visitor-id-v1';
+const discordMark = '<svg class="discord-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.54 5.34A16.3 16.3 0 0 0 15.44 4l-.5 1.02a15.1 15.1 0 0 0-5.88 0L8.56 4a16.3 16.3 0 0 0-4.1 1.34C1.86 9.2 1.16 12.96 1.5 16.66A16.6 16.6 0 0 0 6.5 19.2l1.2-1.64a12 12 0 0 1-1.88-.93c.16.12.33.23.5.34 3.63 1.68 7.63 1.68 11.26 0 .17-.11.34-.22.5-.34-.59.37-1.22.68-1.88.93l1.2 1.64a16.6 16.6 0 0 0 5-2.54c.4-4.3-.68-8.02-2.86-11.32ZM8.68 14.5c-1.1 0-2-1.02-2-2.28s.88-2.28 2-2.28 2.02 1.03 2 2.28c0 1.26-.9 2.28-2 2.28Zm6.64 0c-1.1 0-2-1.02-2-2.28s.88-2.28 2-2.28 2.02 1.03 2 2.28c0 1.26-.9 2.28-2 2.28Z"/></svg>';
 const iconPaths = {
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="M17.2 2.4a4.4 4.4 0 0 0 4.4 4.4 4.4 4.4 0 1 1-4.4-4.4Z"/>',
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
@@ -27,7 +31,7 @@ const activeLabel = pages.find(([id]) => id === active)?.[1] || utilityLabels[ac
 const activeIndex = pages.findIndex(([id]) => id === active);
 navigation.style.setProperty('--active-index', activeIndex);
 navigation.classList.toggle('home-active', activeIndex < 0);
-navigation.innerHTML = `<a class="top-brand" href="./index.html" aria-label="Cloud"><img src="./assets/cloud-logo.png" alt=""></a><nav class="top-tabs" aria-label="Secciones principales">${pages.map(([id,label,url]) => `<a href="${url}" data-nav-index="${pages.findIndex(([pageId]) => pageId === id)}" class="${active===id?'active':''}" ${active===id?'aria-current="page"':''}>${label}</a>`).join('')}<span class="nav-selection" aria-hidden="true"></span></nav><div class="top-actions"><a href="./guias.html" class="icon-link ${active==='guias'?'active':''}" aria-label="Guías" title="Guías">${icon('book')}</a><a href="./herramientas.html" class="icon-link ${active==='herramientas'?'active':''}" aria-label="Herramientas" title="Herramientas">${icon('wrench')}</a><a href="https://github.com/Slourzz" class="profile-link" target="_blank" rel="noreferrer" aria-label="Perfil de Sam" title="Sam!"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"></a></div><span class="mobile-current">${activeLabel}</span><button class="mobile-nav-trigger" type="button" aria-label="Abrir navegación" aria-expanded="false">${icon('menu')}</button>`;
+navigation.innerHTML = `<a class="top-brand" href="./index.html" aria-label="Cloud"><img src="./assets/cloud-logo.png" alt=""></a><nav class="top-tabs" aria-label="Secciones principales">${pages.map(([id,label,url]) => `<a href="${url}" data-nav-index="${pages.findIndex(([pageId]) => pageId === id)}" class="${active===id?'active':''}" ${active===id?'aria-current="page"':''}>${label}</a>`).join('')}<span class="nav-selection" aria-hidden="true"></span></nav><div class="top-actions"><a href="./guias.html" class="icon-link ${active==='guias'?'active':''}" aria-label="Guías" title="Guías">${icon('book')}</a><a href="./herramientas.html" class="icon-link ${active==='herramientas'?'active':''}" aria-label="Herramientas" title="Herramientas">${icon('wrench')}</a><button type="button" class="discord-auth-button discord-auth-compact" data-discord-auth aria-label="Iniciar sesión con Discord" title="Iniciar sesión con Discord">${discordMark}</button></div><span class="mobile-current">${activeLabel}</span><button class="mobile-nav-trigger" type="button" aria-label="Abrir navegación" aria-expanded="false">${icon('menu')}</button>`;
 shell.prepend(navigation);
 
 navigation.querySelectorAll('.top-tabs a').forEach(link => {
@@ -45,8 +49,142 @@ navigation.querySelectorAll('.top-tabs a').forEach(link => {
 const mobileNavigation = document.createElement('aside');
 mobileNavigation.className = 'mobile-navigation';
 mobileNavigation.setAttribute('aria-hidden', 'true');
-mobileNavigation.innerHTML = `<div class="mobile-navigation-head"><a href="./index.html"><img src="./assets/cloud-logo.png" alt=""><b>Cloud</b></a><button type="button" class="mobile-navigation-close" aria-label="Cerrar navegación">${icon('close')}</button></div><nav aria-label="Navegación móvil">${pages.map(([id,label,url], index) => `<a href="${url}" class="${active===id?'active':''}"><span>${String(index + 1).padStart(2,'0')}</span>${label}</a>`).join('')}<a href="./licencia.html" class="${active==='licencia'?'active':''}"><span>05</span>Licencia</a><a href="./repositorio.html" class="${active==='repositorio'?'active':''}"><span>06</span>Repositorio</a><a href="./guias.html" class="${active==='guias'?'active':''}"><span>07</span>Guías</a><a href="./herramientas.html" class="${active==='herramientas'?'active':''}"><span>08</span>Herramientas</a></nav><div class="mobile-navigation-foot"><a href="./repositorio.html"><span>Repositorio</span></a><a href="https://github.com/Slourzz" target="_blank" rel="noreferrer"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"><span>Sam!</span></a></div>`;
+mobileNavigation.innerHTML = `<div class="mobile-navigation-head"><a href="./index.html"><img src="./assets/cloud-logo.png" alt=""><b>Cloud</b></a><button type="button" class="mobile-navigation-close" aria-label="Cerrar navegación">${icon('close')}</button></div><nav aria-label="Navegación móvil">${pages.map(([id,label,url], index) => `<a href="${url}" class="${active===id?'active':''}"><span>${String(index + 1).padStart(2,'0')}</span>${label}</a>`).join('')}<a href="./licencia.html" class="${active==='licencia'?'active':''}"><span>05</span>Licencia</a><a href="./repositorio.html" class="${active==='repositorio'?'active':''}"><span>06</span>Repositorio</a><a href="./guias.html" class="${active==='guias'?'active':''}"><span>07</span>Guías</a><a href="./herramientas.html" class="${active==='herramientas'?'active':''}"><span>08</span>Herramientas</a></nav><div class="mobile-navigation-foot"><button type="button" class="discord-auth-button" data-discord-auth aria-label="Iniciar sesión con Discord">${discordMark}<span>Iniciar sesión</span></button><a href="./repositorio.html"><span>Repositorio</span></a><a href="https://github.com/Slourzz" target="_blank" rel="noreferrer"><img src="https://github.com/Slourzz.png?size=96" alt="Sam!"><span>Sam!</span></a></div>`;
 document.body.append(mobileNavigation);
+
+const discordAuthButtons = [...document.querySelectorAll('[data-discord-auth]')];
+let discordSession = null;
+
+try {
+  const savedSession = JSON.parse(localStorage.getItem(DISCORD_SESSION_KEY) || 'null');
+  if (savedSession?.token && savedSession?.user?.id) discordSession = savedSession;
+} catch {
+  localStorage.removeItem(DISCORD_SESSION_KEY);
+}
+
+const renderDiscordSession = () => {
+  discordAuthButtons.forEach(button => {
+    button.disabled = false;
+    button.classList.toggle('is-connected', Boolean(discordSession));
+    button.replaceChildren();
+    if (discordSession) {
+      if (discordSession.user.avatarUrl) {
+        const avatar = document.createElement('img');
+        avatar.src = discordSession.user.avatarUrl;
+        avatar.alt = '';
+        button.append(avatar);
+      } else {
+        button.insertAdjacentHTML('beforeend', discordMark);
+      }
+      if (!button.classList.contains('discord-auth-compact')) {
+        const label = document.createElement('span');
+        label.textContent = discordSession.user.displayName || discordSession.user.username;
+        button.append(label);
+      }
+      button.setAttribute('aria-label', `Sesión iniciada como ${discordSession.user.displayName}. Cerrar sesión`);
+      button.title = `Sesión iniciada como ${discordSession.user.displayName}. Clic para cerrar sesión.`;
+      return;
+    }
+    button.insertAdjacentHTML('beforeend', discordMark);
+    if (!button.classList.contains('discord-auth-compact')) {
+      const label = document.createElement('span');
+      label.textContent = 'Iniciar sesión';
+      button.append(label);
+    }
+    button.setAttribute('aria-label', 'Iniciar sesión con Discord');
+    button.title = 'Iniciar sesión con Discord';
+  });
+};
+
+const saveDiscordSession = session => {
+  discordSession = session;
+  if (session) localStorage.setItem(DISCORD_SESSION_KEY, JSON.stringify(session));
+  else localStorage.removeItem(DISCORD_SESSION_KEY);
+  renderDiscordSession();
+};
+
+const setDiscordBusy = busy => {
+  discordAuthButtons.forEach(button => {
+    button.disabled = busy;
+    button.classList.toggle('is-loading', busy);
+  });
+};
+
+const pollDiscordSession = async state => {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (attempt) await new Promise(resolve => window.setTimeout(resolve, 1000));
+    const response = await fetch(`${CLOUD_API_BASE}/api/auth/discord/session/${encodeURIComponent(state)}`);
+    if (!response.ok) continue;
+    const result = await response.json();
+    if (result.status === 'complete' && result.token && result.user) return result;
+  }
+  throw new Error('El inicio de sesión tardó demasiado. Inténtalo nuevamente.');
+};
+
+const startDiscordLogin = async () => {
+  if (discordSession) {
+    if (window.confirm(`¿Cerrar la sesión de ${discordSession.user.displayName}?`)) saveDiscordSession(null);
+    return;
+  }
+
+  const popup = window.open('about:blank', 'cloud-discord-auth', 'popup,width=540,height=760');
+  if (!popup) {
+    window.alert('Permite las ventanas emergentes para iniciar sesión con Discord.');
+    return;
+  }
+
+  setDiscordBusy(true);
+  try {
+    popup.document.title = 'Conectando con Discord…';
+    const response = await fetch(`${CLOUD_API_BASE}/api/auth/discord/start`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    });
+    const result = await response.json();
+    if (!response.ok || !result.state || !result.authorizeUrl) {
+      throw new Error(result.error || 'Discord no pudo iniciar la conexión.');
+    }
+    popup.location.replace(result.authorizeUrl);
+    const session = await pollDiscordSession(result.state);
+    saveDiscordSession({token: session.token, user: session.user});
+    if (!popup.closed) popup.close();
+  } catch (error) {
+    if (!popup.closed) popup.close();
+    window.alert(error instanceof Error ? error.message : 'No se pudo iniciar sesión con Discord.');
+  } finally {
+    setDiscordBusy(false);
+  }
+};
+
+discordAuthButtons.forEach(button => button.addEventListener('click', startDiscordLogin));
+renderDiscordSession();
+
+if (discordSession?.token) {
+  fetch(`${CLOUD_API_BASE}/api/auth/discord/me`, {
+    headers: {Authorization: `Bearer ${discordSession.token}`}
+  }).then(response => {
+    if (!response.ok) saveDiscordSession(null);
+  }).catch(() => {});
+}
+
+const recordWebsiteVisit = () => {
+  let visitorId = localStorage.getItem(VISITOR_ID_KEY);
+  if (!visitorId) {
+    visitorId = crypto.randomUUID?.() || [...crypto.getRandomValues(new Uint8Array(16))]
+      .map(value => value.toString(16).padStart(2, '0'))
+      .join('');
+    localStorage.setItem(VISITOR_ID_KEY, visitorId);
+  }
+  fetch(`${CLOUD_API_BASE}/api/analytics/visit`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({visitorId}),
+    keepalive: true
+  }).catch(() => {});
+};
+
+recordWebsiteVisit();
 
 const mobileNavTrigger = navigation.querySelector('.mobile-nav-trigger');
 const mobileNavClose = mobileNavigation.querySelector('.mobile-navigation-close');
