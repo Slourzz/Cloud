@@ -48,4 +48,5 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 
 /* Give the scroll hint its own space below the hero copy. */
 .home-hero-restructured{padding-bottom:168px}
-.home-hero-restructured .hero-scroll-indicator{bottom:14px}
+.home-hero-restructured .hero-scroll-indicator{bottom:24px}
+.home-hero-restructured .hero-scroll-indicator span{display:none}
