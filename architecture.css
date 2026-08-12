@@ -35,7 +35,7 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 @media(max-width:560px){.home-hero-restructured{padding-top:22px}}
 
 /* The home hero now focuses on the Cloud identity, without the concept player. */
-.home-hero-restructured{padding-top:0;min-height:calc(100vh - var(--nav-height, 58px));justify-content:flex-start}
+.home-hero-restructured{padding-top:0;padding-bottom:64px;min-height:auto;justify-content:flex-start}
 .home-hero-restructured .hero-brand-title{transform:translateY(-42px)}
 .home-hero-restructured .player-showcase{display:none}
 @media(max-width:900px){.home-hero-restructured{padding-top:0}.home-hero-restructured .hero-brand-title{transform:translateY(-30px)}}
