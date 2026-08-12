@@ -1,4 +1,4 @@
-:root{--cherry-bg:#181621;--cherry-panel:#211e2b;--cherry-raised:#292535;--cherry-line:#3a3448;--cherry-text:#f3edf8;--cherry-muted:#b8acbf;--cherry-accent:#ea9a97;--cherry-purple:#c4a7e7;--cherry-blue:#9ccfd8}
+:root{--cherry-bg:#232136;--cherry-panel:#211e2b;--cherry-raised:#292535;--cherry-line:#3a3448;--cherry-text:#f3edf8;--cherry-muted:#b8acbf;--cherry-accent:#ea9a97;--cherry-purple:#c4a7e7;--cherry-blue:#9ccfd8}
 body{background:var(--cherry-bg);color:var(--cherry-text)}
 .page{max-width:1440px;margin:0 auto;padding-inline:clamp(22px,5vw,76px)}
 .section-label{display:flex;align-items:center;gap:10px;color:var(--cherry-accent);font-size:.76rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.section-label::before{content:"";width:26px;height:2px;background:currentColor;border-radius:2px}
@@ -70,3 +70,5 @@ body{background:var(--cherry-bg);color:var(--cherry-text)}
 @media(prefers-reduced-motion:reduce){.home-hero-restructured.hero-scroll-sequence{min-height:auto;padding-bottom:168px}.home-hero-restructured.hero-scroll-sequence .hero-copy{position:static;min-height:auto}.home-hero-restructured.hero-scroll-sequence .hero-brand-title,.home-hero-restructured.hero-scroll-sequence .hero-tagline,.home-hero-restructured.hero-scroll-sequence .lead,.home-hero-restructured.hero-scroll-sequence .micro{position:static;width:auto;opacity:1;transform:none;filter:none}.home-hero-restructured.hero-scroll-sequence .hero-scroll-indicator{position:absolute;opacity:1;transform:translateX(-50%);pointer-events:auto}}
 @media(max-width:900px){.home-hero-restructured.hero-scroll-sequence .hero-tagline{top:55%}.home-hero-restructured.hero-scroll-sequence .lead{top:65%}.home-hero-restructured.hero-scroll-sequence .micro{top:77%}}
 @media(max-width:560px){.home-hero-restructured.hero-scroll-sequence .hero-tagline{top:48%}.home-hero-restructured.hero-scroll-sequence .lead{top:60%}.home-hero-restructured.hero-scroll-sequence .micro{top:76%;padding:0 18px}}
+
+html,body,.home-page,.product-story,.cloud-introduction,.themes-showcase{background-color:var(--cherry-bg)!important;background-image:none!important}
