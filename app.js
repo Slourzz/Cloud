@@ -70,8 +70,11 @@ navigation.querySelectorAll('a').forEach(link => link.addEventListener('click', 
 
 const observer = new IntersectionObserver(entries => entries.forEach(entry => { if(entry.isIntersecting){ entry.target.classList.add('visible'); observer.unobserve(entry.target); } }), {threshold:.1});
 document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
+document.querySelectorAll('.cards, .credit-list, .quick-links').forEach(group => {
+  [...group.children].forEach((item, index) => item.style.setProperty('--stagger-delay', `${Math.min(index, 7) * 70}ms`));
+});
 
-const parallaxItems = [...document.querySelectorAll('.player-showcase, .guide-media img, .guide-media video, .hero-media img')];
+const parallaxItems = [...document.querySelectorAll('.player-showcase, .guide-media img, .guide-media video, .hero-media img, .page-header, .intro-grid')];
 let parallaxFrame = 0;
 const updateParallax = () => {
   parallaxFrame = 0;
@@ -79,7 +82,8 @@ const updateParallax = () => {
   parallaxItems.forEach(element => {
     const rect = element.getBoundingClientRect();
     const distance = (rect.top + rect.height / 2 - viewportCenter) / window.innerHeight;
-    element.style.setProperty('--parallax-y', `${Math.max(-14, Math.min(14, distance * -18)).toFixed(2)}px`);
+    const strength = element.matches('.page-header, .intro-grid') ? -34 : -22;
+    element.style.setProperty('--parallax-y', `${Math.max(-24, Math.min(24, distance * strength)).toFixed(2)}px`);
   });
 };
 const requestParallax = () => {
@@ -90,3 +94,19 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
   window.addEventListener('resize', requestParallax);
   requestParallax();
 }
+
+const motionCards = document.querySelectorAll('.info-card, .credit, .guide-card, .stat, .download-card');
+motionCards.forEach(card => {
+  card.addEventListener('pointermove', event => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty('--card-rx', `${((event.clientY - rect.top) / rect.height - .5) * -3.5}deg`);
+    card.style.setProperty('--card-ry', `${((event.clientX - rect.left) / rect.width - .5) * 4.5}deg`);
+    card.style.setProperty('--card-x', `${event.clientX - rect.left}px`);
+    card.style.setProperty('--card-y', `${event.clientY - rect.top}px`);
+  });
+  card.addEventListener('pointerleave', () => {
+    card.style.removeProperty('--card-rx');
+    card.style.removeProperty('--card-ry');
+  });
+});
