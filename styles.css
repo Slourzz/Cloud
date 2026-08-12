@@ -70,6 +70,8 @@
 .catalog-title small{color:#7f788b;font-size:11px}
 .tool-row{min-height:86px;padding:16px 18px;display:grid;grid-template-columns:48px 1fr 28px;align-items:center;gap:16px;border:1px solid var(--line);border-radius:19px;background:rgba(255,255,255,.025);transition:transform .22s,background .22s,border-color .22s}
 .tool-row:hover{transform:translateY(-2px);background:rgba(255,255,255,.055);border-color:rgba(198,111,234,.35)}
+.tool-row-disabled{cursor:default;opacity:.68}
+.tool-row-disabled:hover{transform:none;background:rgba(255,255,255,.025);border-color:var(--line)}
 .tool-row-icon{width:46px;height:46px;display:grid;place-items:center;border-radius:14px;background:rgba(198,111,234,.12);color:#d985f0}
 .tool-row svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .tool-row-copy{display:grid;gap:4px}
