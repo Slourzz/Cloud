@@ -70,6 +70,33 @@ navigation.querySelectorAll('a').forEach(link => link.addEventListener('click', 
 
 const observer = new IntersectionObserver(entries => entries.forEach(entry => { if(entry.isIntersecting){ entry.target.classList.add('visible'); observer.unobserve(entry.target); } }), {threshold:.1});
 document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
+
+const scrollHero = document.querySelector('.home-hero-restructured');
+if (scrollHero && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  scrollHero.classList.add('hero-scroll-sequence');
+  const clamp = value => Math.min(1, Math.max(0, value));
+  let heroFrame = 0;
+  const updateHeroSequence = () => {
+    heroFrame = 0;
+    const start = scrollHero.offsetTop;
+    const distance = Math.max(1, scrollHero.offsetHeight - window.innerHeight);
+    const rawProgress = (window.scrollY - start) / distance;
+    const progress = clamp(rawProgress);
+    const copyProgress = clamp((progress - .08) / .34);
+    const detailsProgress = clamp((progress - .34) / .38);
+    const arrowProgress = rawProgress > 1.04 ? 0 : clamp((progress - .82) / .14);
+    scrollHero.style.setProperty('--hero-copy-progress', copyProgress.toFixed(3));
+    scrollHero.style.setProperty('--hero-details-progress', detailsProgress.toFixed(3));
+    scrollHero.style.setProperty('--hero-arrow-progress', arrowProgress.toFixed(3));
+    scrollHero.classList.toggle('hero-sequence-complete', arrowProgress > .98);
+  };
+  const requestHeroSequence = () => {
+    if (!heroFrame) heroFrame = requestAnimationFrame(updateHeroSequence);
+  };
+  window.addEventListener('scroll', requestHeroSequence, {passive:true});
+  window.addEventListener('resize', requestHeroSequence);
+  updateHeroSequence();
+}
 document.querySelectorAll('.cards, .credit-list, .quick-links').forEach(group => {
   [...group.children].forEach((item, index) => item.style.setProperty('--stagger-delay', `${Math.min(index, 7) * 70}ms`));
 });
