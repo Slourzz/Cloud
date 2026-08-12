@@ -96,7 +96,6 @@ if (scrollHero && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
     scrollHero.style.setProperty('--hero-details-progress', detailsProgress.toFixed(3));
     scrollHero.style.setProperty('--hero-arrow-progress', arrowProgress.toFixed(3));
     scrollHero.classList.toggle('hero-sequence-complete', arrowProgress > .98);
-    scrollHero.classList.toggle('hero-sequence-past', rawProgress > 1.04);
   };
   const requestHeroSequence = () => {
     if (!heroFrame) heroFrame = requestAnimationFrame(updateHeroSequence);
