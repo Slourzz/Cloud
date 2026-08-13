@@ -1671,6 +1671,48 @@ export async function getDiscordSession(tokenHash: string) {
   return result.rows[0]?.user_data;
 }
 
+export async function getApprovedSubmissionsBySubmitter(
+  discordId: string,
+  limit = 50,
+) {
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+
+  if (!pool) {
+    return [...memorySubmissions.values()]
+      .filter(
+        (submission) =>
+          submission.status === "approved" &&
+          submission.submitter?.id === discordId,
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, safeLimit);
+  }
+
+  const result = await pool.query<SubmissionRow>(
+    `
+      SELECT
+        id,
+        song,
+        file_name,
+        ttml_content,
+        status,
+        created_at,
+        message_id,
+        channel_id,
+        submitter,
+        moderator
+      FROM ttml_submissions
+      WHERE status = 'approved'
+        AND submitter->>'id' = $1
+      ORDER BY updated_at DESC
+      LIMIT $2
+    `,
+    [discordId, safeLimit],
+  );
+
+  return result.rows.map(rowToSubmission);
+}
+
 export async function getDiscordProfile(discordId: string) {
   if (!pool) {
     for (const session of memoryAuthSessions.values()) {

@@ -80,6 +80,7 @@ import {
   getCommunityArtistMediaImage,
   getMaintenanceSnapshot,
   getApprovedSubmission,
+  getApprovedSubmissionsBySubmitter,
   getDiscordAuthRequest,
   getDiscordProfile,
   getDiscordSession,
@@ -3222,6 +3223,32 @@ app.get("/api/profiles/:discordId", async (req, res) => {
 
   res.setHeader("Cache-Control", "private, no-store");
   res.json({ profile });
+});
+
+app.get("/api/profiles/:discordId/contributions", async (req, res) => {
+  const discordId = req.params.discordId;
+  if (!/^\d{15,22}$/.test(discordId)) {
+    res.status(400).json({ error: "Discord profile id is invalid" });
+    return;
+  }
+
+  const profile = await getDiscordProfile(discordId);
+  if (!profile) {
+    res.status(404).json({ error: "Cloud profile was not found" });
+    return;
+  }
+
+  const submissions = await getApprovedSubmissionsBySubmitter(discordId);
+  const contributions = submissions.map((submission) => ({
+    id: submission.id,
+    title: submission.song.title,
+    artist: submission.song.artist,
+    coverUrl: submission.song.coverUrl,
+    createdAt: submission.createdAt,
+  }));
+
+  res.setHeader("Cache-Control", "public, max-age=60");
+  res.json({ count: contributions.length, contributions });
 });
 
 app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {
