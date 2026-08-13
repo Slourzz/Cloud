@@ -8,10 +8,13 @@ const colorsRoot = document.querySelector("#kawarp-colors");
 const darkness = document.querySelector("#palette-darkness");
 const darknessValue = document.querySelector("#darkness-value");
 const generateButton = document.querySelector("#generate-gif");
+const downloadButton = document.querySelector("#download-custom-gif");
 const status = document.querySelector("#gif-status");
 const logo = document.querySelector(".discord-gif-logo");
 let preview;
 let updateTimer;
+let generatedGifUrl;
+let generatedGifSize = 0;
 
 function paletteCanvas(colors, amount, size = 512) {
   const canvas = document.createElement("canvas");
@@ -32,6 +35,10 @@ function updatePreview() {
   preview.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value)));
   preview.isTransitioning = false;
   preview.start();
+  if (generatedGifUrl) URL.revokeObjectURL(generatedGifUrl);
+  generatedGifUrl = undefined;
+  generatedGifSize = 0;
+  downloadButton.disabled = true;
   status.textContent = "La vista previa ya usa tus colores.";
 }
 
@@ -73,6 +80,7 @@ function canvasFromImageData(imageData) {
 
 async function generateGif() {
   generateButton.disabled = true;
+  downloadButton.disabled = true;
   try {
     status.textContent = "Preparando Kawarp real…";
     await nextPaint();
@@ -129,13 +137,11 @@ async function generateGif() {
     kawarp.dispose();
     gif.finish();
     const blob = new Blob([gif.bytes()], { type: "image/gif" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "cloud-kawarp-personalizado.gif";
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-    status.textContent = `GIF descargado (${(blob.size / 1024 / 1024).toFixed(1)} MB), bucle infinito y logo fijo.`;
+    if (generatedGifUrl) URL.revokeObjectURL(generatedGifUrl);
+    generatedGifUrl = URL.createObjectURL(blob);
+    generatedGifSize = blob.size;
+    downloadButton.disabled = false;
+    status.textContent = `GIF listo (${(blob.size / 1024 / 1024).toFixed(1)} MB). Pulsa “Descargar mi GIF” cuando quieras guardarlo.`;
   } catch (error) {
     console.error(error);
     status.textContent = "No se pudo crear el GIF. Prueba de nuevo con WebGL activado.";
@@ -161,3 +167,11 @@ document.querySelector("#reset-palette").addEventListener("click", () => {
   updatePreview();
 });
 generateButton.addEventListener("click", generateGif);
+downloadButton.addEventListener("click", () => {
+  if (!generatedGifUrl) return;
+  const anchor = document.createElement("a");
+  anchor.href = generatedGifUrl;
+  anchor.download = "cloud-kawarp-personalizado.gif";
+  anchor.click();
+  status.textContent = `GIF descargado (${(generatedGifSize / 1024 / 1024).toFixed(1)} MB).`;
+});

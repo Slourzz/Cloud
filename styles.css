@@ -316,6 +316,7 @@ html,body{max-width:100%;overflow-x:hidden}
 .kawarp-darkness output{color:#ea9a97}.kawarp-darkness input{grid-column:1/-1;width:100%;accent-color:#ea9a97}
 .gif-status{min-height:20px;margin:13px 0 0!important;color:#908caa!important;font-size:11px;line-height:1.5!important}
 #generate-gif:disabled{opacity:.58;cursor:wait;transform:none}
+#download-custom-gif:disabled{opacity:.38;cursor:not-allowed;transform:none}
 .discord-gif-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:25px 0}
 .discord-gif-facts div{padding:13px 14px;border-radius:13px;background:#211e2b;border:1px solid rgba(224,222,244,.1)}
 .discord-gif-facts dt{color:#908caa;font-size:11px}
