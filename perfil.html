@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=profile2">
+  <link rel="stylesheet" href="./styles.css?v=profile3">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
 </head>
 <body data-page="perfil">
@@ -34,34 +34,25 @@
       <article id="profile-content" class="cloud-profile" hidden>
         <div class="cloud-profile-banner">
           <span></span><span></span><span></span>
-          <div class="profile-hero-identity">
-            <img id="profile-avatar" class="cloud-profile-avatar" src="./assets/cloud-app-icon.png" alt="">
-            <div>
-              <h1 id="profile-display-name"></h1>
-              <p id="profile-username"></p>
-              <small><b>0</b> contribuciones · miembro de Cloud</small>
-            </div>
-          </div>
         </div>
         <div class="cloud-profile-body">
-          <div class="cloud-profile-actions">
-            <a class="profile-action-button" id="profile-discord-link" target="_blank" rel="noreferrer"><span>◉</span>Ver en Discord</a>
-            <button class="profile-action-button" id="profile-copy-url" type="button"><span>↗</span>Compartir perfil</button>
-            <button class="profile-action-button" id="profile-edit" type="button" hidden><span>✎</span>Editar perfil</button>
+          <img id="profile-avatar" class="cloud-profile-avatar" src="./assets/cloud-app-icon.png" alt="">
+          <div class="cloud-profile-identity">
+            <span class="profile-verified">Perfil de Discord verificado</span>
+            <h1 id="profile-display-name"></h1>
+            <p id="profile-username"></p>
           </div>
-          <section class="profile-biography">
-            <span>Biografía</span>
-            <div>
-              <h2>Miembro de Cloud</h2>
-              <p>Perfil conectado y verificado mediante Discord.</p>
-            </div>
-          </section>
-          <footer class="profile-footer-meta">
-            <span>Discord ID: <b id="profile-discord-id"></b></span>
-            <input id="profile-share-url" type="hidden" readonly>
-            <button id="profile-my-profile" type="button">Mi perfil</button>
-            <button id="profile-logout" type="button">Cerrar sesión</button>
-          </footer>
+          <div class="cloud-profile-actions">
+            <a class="profile-action-button" id="profile-discord-link" target="_blank" rel="noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 5.34A17.3 17.3 0 0 0 15.44 4l-.5 1.03a15.8 15.8 0 0 0-5.86 0L8.56 4A17.3 17.3 0 0 0 4.5 5.34C1.93 9.18 1.23 12.93 1.58 16.62a16.4 16.4 0 0 0 4.98 2.51l1.22-1.66a10.7 10.7 0 0 1-1.91-.92l.47-.36a12.45 12.45 0 0 0 11.32 0l.48.36c-.61.36-1.25.67-1.92.92l1.22 1.66a16.4 16.4 0 0 0 4.98-2.51c.41-4.28-.7-8-2.92-11.28ZM8.82 14.37c-1.09 0-1.98-1-1.98-2.22s.87-2.23 1.98-2.23 2 1 1.98 2.23c0 1.22-.88 2.22-1.98 2.22Zm6.36 0c-1.1 0-1.98-1-1.98-2.22s.87-2.23 1.98-2.23 2 1 1.98 2.23c0 1.22-.87 2.22-1.98 2.22Z"/></svg>Ver en Discord</a>
+            <button class="profile-action-button" id="profile-copy-url" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5 15.5 8m-7 3.5 7 4.5M6 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm11-4a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm0 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>Compartir perfil</button>
+            <button class="profile-action-button" id="profile-edit" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4 4M4 20l4.5-1 10-10a2.83 2.83 0 0 0-4-4l-10 10L4 20Z"/></svg>Editar perfil</button>
+          </div>
+          <dl class="profile-details">
+            <div><dt>Discord ID</dt><dd id="profile-discord-id"></dd></div>
+            <div><dt>Acceso</dt><dd>Miembro de Cloud</dd></div>
+          </dl>
+          <label class="profile-share-field" for="profile-share-url"><span>URL compartible</span><input id="profile-share-url" type="text" readonly></label>
+          <footer class="profile-footer-meta"><button id="profile-my-profile" type="button">Mi perfil</button><button id="profile-logout" type="button">Cerrar sesión</button></footer>
         </div>
       </article>
     </main>
