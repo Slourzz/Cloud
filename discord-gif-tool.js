@@ -1,0 +1,163 @@
+import { Kawarp } from "./assets/vendor/kawarp-core.js";
+import { GIFEncoder, quantize, applyPalette } from "./assets/vendor/gifenc.esm.js";
+
+const DEFAULT_COLORS = ["#FFD1DC", "#A2CFFE", "#AAF0D1", "#E3E4FA", "#FFFACD", "#FFDAB9", "#DCD0FF", "#B0E0E6"];
+const OPTIONS = { warpIntensity: 1.85, blurPasses: 10, animationSpeed: 0.82, saturation: 2.15, dithering: 0.012, transitionDuration: 0, tintIntensity: 0.28, scale: 1.08 };
+const previewCanvas = document.querySelector("#kawarp-preview");
+const colorsRoot = document.querySelector("#kawarp-colors");
+const darkness = document.querySelector("#palette-darkness");
+const darknessValue = document.querySelector("#darkness-value");
+const generateButton = document.querySelector("#generate-gif");
+const status = document.querySelector("#gif-status");
+const logo = document.querySelector(".discord-gif-logo");
+let preview;
+let updateTimer;
+
+function paletteCanvas(colors, amount, size = 512) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const context = canvas.getContext("2d");
+  colors.forEach((color, index) => {
+    const rgb = color.match(/[a-f\d]{2}/gi).map(value => Math.round(parseInt(value, 16) * (1 - amount / 100)));
+    context.fillStyle = `rgb(${rgb.join(",")})`;
+    context.fillRect((index % 4) * size / 4, Math.floor(index / 4) * size / 2, size / 4, size / 2);
+  });
+  return canvas;
+}
+
+const selectedColors = () => [...colorsRoot.querySelectorAll("input")].map(input => input.value);
+
+function updatePreview() {
+  darknessValue.value = `${darkness.value}%`;
+  preview.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value)));
+  preview.isTransitioning = false;
+  preview.start();
+  status.textContent = "La vista previa ya usa tus colores.";
+}
+
+function schedulePreview() {
+  clearTimeout(updateTimer);
+  updateTimer = setTimeout(updatePreview, 70);
+}
+
+function buildColorInputs(colors) {
+  colorsRoot.replaceChildren();
+  colors.forEach((color, index) => {
+    const label = document.createElement("label");
+    label.className = "kawarp-color";
+    label.style.background = color;
+    label.title = `Color ${index + 1}: ${color}`;
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = color;
+    input.setAttribute("aria-label", `Color ${index + 1}`);
+    input.addEventListener("input", () => {
+      label.style.background = input.value;
+      label.title = `Color ${index + 1}: ${input.value.toUpperCase()}`;
+      schedulePreview();
+    });
+    label.append(input);
+    colorsRoot.append(label);
+  });
+}
+
+const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+function canvasFromImageData(imageData) {
+  const canvas = document.createElement("canvas");
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  canvas.getContext("2d").putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+async function generateGif() {
+  generateButton.disabled = true;
+  try {
+    status.textContent = "Preparando Kawarp real…";
+    await nextPaint();
+    const size = 512, totalFrames = 80, overlap = 16, fps = 16;
+    const renderCanvas = document.createElement("canvas");
+    renderCanvas.width = renderCanvas.height = size;
+    const kawarp = new Kawarp(renderCanvas, OPTIONS);
+    kawarp.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value), size));
+    kawarp.isTransitioning = false;
+    if (!logo.complete || !logo.naturalWidth) await logo.decode();
+    const capture = document.createElement("canvas");
+    capture.width = capture.height = size;
+    const captureContext = capture.getContext("2d", { willReadFrequently: true });
+    const composite = document.createElement("canvas");
+    composite.width = composite.height = size;
+    const context = composite.getContext("2d", { willReadFrequently: true });
+    const rawFrames = [];
+
+    for (let frame = 0; frame < totalFrames; frame += 1) {
+      kawarp.render(frame / fps * OPTIONS.animationSpeed, frame / fps * 1000);
+      captureContext.drawImage(renderCanvas, 0, 0);
+      rawFrames.push(captureContext.getImageData(0, 0, size, size));
+      if (frame % 8 === 0) {
+        status.textContent = `Renderizando fondo… ${Math.round((frame + 1) / totalFrames * 45)}%`;
+        await nextPaint();
+      }
+    }
+
+    const gif = GIFEncoder();
+    const outputFrames = totalFrames - overlap;
+    for (let frame = 0; frame < outputFrames; frame += 1) {
+      context.globalAlpha = 1;
+      context.clearRect(0, 0, size, size);
+      if (frame < outputFrames - overlap) {
+        context.putImageData(rawFrames[frame + overlap], 0, 0);
+      } else {
+        const blendIndex = frame - (outputFrames - overlap);
+        context.putImageData(rawFrames[outputFrames + blendIndex], 0, 0);
+        context.globalAlpha = (blendIndex + 1) / overlap;
+        context.drawImage(canvasFromImageData(rawFrames[blendIndex]), 0, 0);
+        context.globalAlpha = 1;
+      }
+      const logoWidth = size * .58;
+      const logoHeight = logo.naturalHeight / logo.naturalWidth * logoWidth;
+      context.drawImage(logo, (size - logoWidth) / 2, (size - logoHeight) / 2, logoWidth, logoHeight);
+      const rgba = context.getImageData(0, 0, size, size).data;
+      const palette = quantize(rgba, 128, { format: "rgb444" });
+      gif.writeFrame(applyPalette(rgba, palette, "rgb444"), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0 });
+      if (frame % 4 === 0) {
+        status.textContent = `Creando GIF… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
+        await nextPaint();
+      }
+    }
+    kawarp.dispose();
+    gif.finish();
+    const blob = new Blob([gif.bytes()], { type: "image/gif" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "cloud-kawarp-personalizado.gif";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    status.textContent = `GIF descargado (${(blob.size / 1024 / 1024).toFixed(1)} MB), bucle infinito y logo fijo.`;
+  } catch (error) {
+    console.error(error);
+    status.textContent = "No se pudo crear el GIF. Prueba de nuevo con WebGL activado.";
+  } finally {
+    generateButton.disabled = false;
+  }
+}
+
+buildColorInputs(DEFAULT_COLORS);
+try {
+  preview = new Kawarp(previewCanvas, OPTIONS);
+  updatePreview();
+} catch (error) {
+  console.error(error);
+  status.textContent = "La vista previa necesita WebGL activado.";
+  generateButton.disabled = true;
+}
+
+darkness.addEventListener("input", schedulePreview);
+document.querySelector("#reset-palette").addEventListener("click", () => {
+  darkness.value = "18";
+  buildColorInputs(DEFAULT_COLORS);
+  updatePreview();
+});
+generateButton.addEventListener("click", generateGif);

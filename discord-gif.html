@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=discord-gif1">
+  <link rel="stylesheet" href="./styles.css?v=discord-gif2">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
 </head>
 <body data-page="herramientas">
@@ -23,26 +23,38 @@
 
       <section class="discord-gif-panel reveal" aria-labelledby="discord-gif-title">
         <div class="discord-gif-preview">
-          <img src="./assets/cloud-kawarp-discord.gif" alt="Logo de Cloud sobre un fondo fluido rosa, morado y azul">
+          <canvas id="kawarp-preview" width="512" height="512" aria-label="Vista previa animada de Kawarp"></canvas>
+          <img class="discord-gif-logo" src="./assets/cloud-splash-logo.png" alt="Logo de Cloud">
         </div>
         <div class="discord-gif-copy">
           <span class="section-label">Recurso del servidor</span>
           <h2 id="discord-gif-title">Cloud × Kawarp</h2>
-          <p>El fondo fue renderizado con el mismo motor Kawarp WebGL y los mismos parámetros de Cloud para escritorio, usando directamente la paleta pastel proporcionada como textura. El logo permanece fijo y el cierre mezcla suavemente el final con el inicio.</p>
+          <p>Usa el Kawarp real de Cloud para escritorio. Elige ocho colores, ajusta cuánto quieres oscurecerlos y crea un GIF en bucle con el logo totalmente fijo.</p>
+          <div class="kawarp-controls">
+            <div class="kawarp-control-heading"><span>Paleta de 8 colores</span><button id="reset-palette" type="button">Restablecer</button></div>
+            <div id="kawarp-colors" class="kawarp-colors" aria-label="Colores del fondo"></div>
+            <label class="kawarp-darkness" for="palette-darkness">
+              <span>Oscurecer colores</span><output id="darkness-value" for="palette-darkness">18%</output>
+              <input id="palette-darkness" type="range" min="0" max="55" value="18" step="1">
+            </label>
+          </div>
           <dl class="discord-gif-facts">
             <div><dt>Tamaño</dt><dd>512 × 512 px</dd></div>
-            <div><dt>Duración</dt><dd>5.6 segundos</dd></div>
+            <div><dt>Duración</dt><dd>4 segundos</dd></div>
             <div><dt>Repetición</dt><dd>Infinita</dd></div>
-            <div><dt>Peso</dt><dd>8.6 MB</dd></div>
+            <div><dt>Colores</dt><dd>8 personalizables</dd></div>
           </dl>
           <div class="actions">
-            <a class="button primary" href="./assets/cloud-kawarp-discord.gif" download="cloud-kawarp-discord.gif">Descargar GIF</a>
+            <button class="button primary" id="generate-gif" type="button">Crear y descargar GIF</button>
+            <a class="button secondary" href="./assets/cloud-kawarp-discord.gif" download="cloud-kawarp-discord.gif">Descargar original</a>
             <a class="button secondary" href="./herramientas.html">Volver a herramientas</a>
           </div>
+          <p id="gif-status" class="gif-status" role="status" aria-live="polite">La vista previa ya usa tus colores.</p>
         </div>
       </section>
     </main>
   </div>
-  <script src="./app.js?v=discord-gif1"></script>
+  <script src="./app.js?v=discord-gif2"></script>
+  <script type="module" src="./discord-gif-tool.js?v=1"></script>
 </body>
 </html>

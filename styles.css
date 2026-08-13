@@ -301,9 +301,21 @@ html,body{max-width:100%;overflow-x:hidden}
 .discord-gif-page{width:min(100%,1040px);margin:0 auto;padding-bottom:110px}
 .discord-gif-panel{display:grid;grid-template-columns:minmax(300px,512px) minmax(280px,1fr);gap:clamp(34px,6vw,72px);align-items:center;padding:34px;border:1px solid rgba(224,222,244,.13);border-radius:28px;background:#2a273f;box-shadow:0 28px 70px rgba(12,9,23,.28)}
 .discord-gif-preview{aspect-ratio:1;border-radius:22px;overflow:hidden;background:#181621;box-shadow:0 18px 44px rgba(9,6,18,.38)}
-.discord-gif-preview img{display:block;width:100%;height:100%;object-fit:cover}
+.discord-gif-preview{position:relative}
+.discord-gif-preview canvas{display:block;width:100%;height:100%}
+.discord-gif-preview .discord-gif-logo{position:absolute;z-index:2;inset:50% auto auto 50%;width:58%;height:auto;object-fit:contain;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 7px 15px rgba(19,11,29,.18))}
 .discord-gif-copy h2{margin:13px 0 16px;font:800 clamp(2rem,4vw,3.7rem)/.98 "M PLUS 1p",sans-serif;letter-spacing:-.05em}
 .discord-gif-copy>p{color:#aaa6c2;line-height:1.7}
+.kawarp-controls{margin:22px 0;padding:16px;border:1px solid rgba(224,222,244,.12);border-radius:16px;background:#211e2b}
+.kawarp-control-heading,.kawarp-darkness{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;font-weight:800}
+.kawarp-control-heading button{padding:0;border:0;background:none;color:#ea9a97;font-size:11px;font-weight:800;cursor:pointer}
+.kawarp-colors{display:grid;grid-template-columns:repeat(8,minmax(24px,1fr));gap:7px;margin:13px 0 17px}
+.kawarp-color{position:relative;aspect-ratio:1;min-width:0;overflow:hidden;border:2px solid rgba(255,255,255,.17);border-radius:50%;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.2)}
+.kawarp-color input{position:absolute;inset:-10px;width:calc(100% + 20px);height:calc(100% + 20px);border:0;padding:0;cursor:pointer;opacity:0}
+.kawarp-darkness{display:grid;grid-template-columns:1fr auto;gap:8px}
+.kawarp-darkness output{color:#ea9a97}.kawarp-darkness input{grid-column:1/-1;width:100%;accent-color:#ea9a97}
+.gif-status{min-height:20px;margin:13px 0 0!important;color:#908caa!important;font-size:11px;line-height:1.5!important}
+#generate-gif:disabled{opacity:.58;cursor:wait;transform:none}
 .discord-gif-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:25px 0}
 .discord-gif-facts div{padding:13px 14px;border-radius:13px;background:#211e2b;border:1px solid rgba(224,222,244,.1)}
 .discord-gif-facts dt{color:#908caa;font-size:11px}
