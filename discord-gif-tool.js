@@ -3,7 +3,11 @@ import { GIFEncoder, quantize } from "./assets/vendor/gifenc.esm.js";
 
 const DEFAULT_COLORS = ["#FFD1DC", "#A2CFFE", "#AAF0D1", "#E3E4FA", "#FFFACD", "#FFDAB9", "#DCD0FF", "#B0E0E6"];
 const OPTIONS = { warpIntensity: 1.85, blurPasses: 10, animationSpeed: 0.82, saturation: 2.15, dithering: 0.012, transitionDuration: 0, tintIntensity: 0.28, scale: 1.08 };
-const PRESETS = { profile: { width: 600, height: 240, label: "Perfil" }, server: { width: 960, height: 540, label: "Servidor" } };
+const PRESETS = {
+  square: { width: 512, height: 512, label: "Cuadrado", logoScale: .58 },
+  profile: { width: 600, height: 240, label: "Perfil", logoScale: .34 },
+  server: { width: 960, height: 540, label: "Servidor", logoScale: .34 }
+};
 const previewCanvas = document.querySelector("#kawarp-preview");
 const colorsRoot = document.querySelector("#kawarp-colors");
 const darkness = document.querySelector("#palette-darkness");
@@ -18,7 +22,7 @@ let preview;
 let updateTimer;
 let generatedGifUrl;
 let generatedGifSize = 0;
-let selectedPreset = "profile";
+let selectedPreset = "square";
 
 function paletteCanvas(colors, amount, width, height) {
   const canvas = document.createElement("canvas");
@@ -55,7 +59,9 @@ function selectBannerSize(name) {
   previewCanvas.width = preset.width;
   previewCanvas.height = preset.height;
   preview.resize();
-  document.querySelector(".discord-gif-preview").style.setProperty("--banner-ratio", preset.width / preset.height);
+  const previewFrame = document.querySelector(".discord-gif-preview");
+  previewFrame.style.setProperty("--banner-ratio", preset.width / preset.height);
+  previewFrame.dataset.preset = name;
   dimensions.textContent = `${preset.width} × ${preset.height} px`;
   sizeControl.dataset.active = name;
   sizeControl.querySelectorAll(".banner-size-option").forEach(button => {
@@ -157,7 +163,7 @@ async function generateGif() {
   try {
     status.textContent = "Preparando Kawarp real…";
     await nextPaint();
-    const { width, height } = PRESETS[selectedPreset];
+    const { width, height, logoScale } = PRESETS[selectedPreset];
     const totalFrames = 80, overlap = 16, fps = 16;
     const renderCanvas = document.createElement("canvas");
     renderCanvas.width = width;
@@ -200,7 +206,7 @@ async function generateGif() {
         context.drawImage(canvasFromImageData(rawFrames[blendIndex]), 0, 0);
         context.globalAlpha = 1;
       }
-      const logoWidth = width * .34;
+      const logoWidth = width * logoScale;
       const logoHeight = logo.naturalHeight / logo.naturalWidth * logoWidth;
       context.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
       const rgba = context.getImageData(0, 0, width, height).data;

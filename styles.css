@@ -300,14 +300,16 @@ html,body{max-width:100%;overflow-x:hidden}
 
 .discord-gif-page{width:min(100%,1040px);margin:0 auto;padding-bottom:110px}
 .discord-gif-panel{display:grid;grid-template-columns:minmax(300px,512px) minmax(280px,1fr);gap:clamp(34px,6vw,72px);align-items:center;padding:34px;border:1px solid rgba(224,222,244,.13);border-radius:28px;background:#2a273f;box-shadow:0 28px 70px rgba(12,9,23,.28)}
-.discord-gif-preview{position:relative;aspect-ratio:var(--banner-ratio,2.5);border-radius:22px;overflow:hidden;background:#181621;box-shadow:0 18px 44px rgba(9,6,18,.38);transition:aspect-ratio .65s cubic-bezier(.22,1,.36,1),border-radius .45s cubic-bezier(.22,1,.36,1),box-shadow .45s}
+.discord-gif-preview{position:relative;aspect-ratio:var(--banner-ratio,1);border-radius:22px;overflow:hidden;background:#181621;box-shadow:0 18px 44px rgba(9,6,18,.38);transition:aspect-ratio .65s cubic-bezier(.22,1,.36,1),border-radius .45s cubic-bezier(.22,1,.36,1),box-shadow .45s}
 .discord-gif-preview canvas{display:block;width:100%;height:100%}
 .discord-gif-preview .discord-gif-logo{position:absolute;z-index:2;inset:50% auto auto 50%;width:34%;height:auto;object-fit:contain;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 7px 15px rgba(19,11,29,.18));transition:width .6s cubic-bezier(.22,1,.36,1),transform .6s cubic-bezier(.22,1,.36,1)}
+.discord-gif-preview[data-preset="square"] .discord-gif-logo{width:58%}
 .discord-gif-copy h2{margin:13px 0 16px;font:800 clamp(2rem,4vw,3.7rem)/.98 "M PLUS 1p",sans-serif;letter-spacing:-.05em}
 .discord-gif-copy>p{color:#aaa6c2;line-height:1.7}
-.banner-size-control{position:relative;isolation:isolate;display:grid;grid-template-columns:repeat(2,1fr);margin:22px 0 0;padding:5px;border:1px solid rgba(224,222,244,.12);border-radius:16px;background:#211e2b}
-.banner-size-highlight{position:absolute;z-index:-1;top:5px;bottom:5px;left:5px;width:calc(50% - 5px);border:1px solid rgba(234,154,151,.22);border-radius:12px;background:linear-gradient(135deg,#393552,#312e49);box-shadow:0 8px 22px rgba(10,7,19,.24);transition:transform .55s cubic-bezier(.22,1,.36,1)}
-.banner-size-control[data-active="server"] .banner-size-highlight{transform:translateX(100%)}
+.banner-size-control{position:relative;isolation:isolate;display:grid;grid-template-columns:repeat(3,1fr);margin:22px 0 0;padding:5px;border:1px solid rgba(224,222,244,.12);border-radius:16px;background:#211e2b}
+.banner-size-highlight{position:absolute;z-index:-1;top:5px;bottom:5px;left:5px;width:calc((100% - 10px)/3);border:1px solid rgba(234,154,151,.22);border-radius:12px;background:linear-gradient(135deg,#393552,#312e49);box-shadow:0 8px 22px rgba(10,7,19,.24);transition:transform .55s cubic-bezier(.22,1,.36,1)}
+.banner-size-control[data-active="profile"] .banner-size-highlight{transform:translateX(100%)}
+.banner-size-control[data-active="server"] .banner-size-highlight{transform:translateX(200%)}
 .banner-size-option{min-width:0;padding:11px 9px;display:grid;gap:3px;border:0;background:transparent;color:#908caa;cursor:pointer;transition:color .35s,transform .35s cubic-bezier(.22,1,.36,1)}
 .banner-size-option:hover{color:#e0def4}.banner-size-option.is-active{color:#f3edf8}.banner-size-option:active{transform:scale(.97)}
 .banner-size-option strong{font-size:12px}.banner-size-option small{font-size:10px;color:inherit}
