@@ -97,6 +97,7 @@ function clampLayer(layer) {
 
 function enableDragging(layer) {
   layer.element.addEventListener("pointerdown", event => {
+    if (event.target.closest(".resize-handle")) return;
     event.preventDefault();
     selectLayer(layer);
     layer.element.setPointerCapture(event.pointerId);
@@ -143,18 +144,91 @@ function enableDragging(layer) {
   });
 }
 
+function enableResizing(layer, handle) {
+  handle.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    selectLayer(layer);
+    handle.setPointerCapture(event.pointerId);
+    const stage = editorStage.getBoundingClientRect();
+    const item = layer.element.getBoundingClientRect();
+    const corner = handle.dataset.corner;
+    const east = corner.includes("e");
+    const south = corner.includes("s");
+    const anchorX = east ? item.left : item.right;
+    const anchorY = south ? item.top : item.bottom;
+    const directionX = east ? 1 : -1;
+    const directionY = south ? 1 : -1;
+    const aspect = layer.image.naturalWidth / layer.image.naturalHeight;
+    const maxWidthX = east ? stage.right - anchorX : anchorX - stage.left;
+    const maxHeight = south ? stage.bottom - anchorY : anchorY - stage.top;
+    const maxWidth = Math.max(24, Math.min(maxWidthX, maxHeight * aspect));
+
+    const move = moveEvent => {
+      let pointerX = Math.max(stage.left, Math.min(stage.right, moveEvent.clientX));
+      let pointerY = Math.max(stage.top, Math.min(stage.bottom, moveEvent.clientY));
+      const threshold = 12;
+      const targetsX = [stage.left, stage.left + stage.width / 2, stage.right];
+      const targetsY = [stage.top, stage.top + stage.height / 2, stage.bottom];
+      let snapX = null, snapY = null;
+      for (const target of targetsX) if (Math.abs(pointerX - target) <= threshold) { pointerX = target; snapX = (target - stage.left) / stage.width; break; }
+      for (const target of targetsY) if (Math.abs(pointerY - target) <= threshold) { pointerY = target; snapY = (target - stage.top) / stage.height; break; }
+      const widthFromX = Math.abs(pointerX - anchorX);
+      const widthFromY = Math.abs(pointerY - anchorY) * aspect;
+      const newWidth = Math.max(24, Math.min(maxWidth, Math.max(widthFromX, widthFromY)));
+      const newHeight = newWidth / aspect;
+      const centerX = anchorX + directionX * newWidth / 2;
+      const centerY = anchorY + directionY * newHeight / 2;
+      layer.width = newWidth / stage.width;
+      layer.x = (centerX - stage.left) / stage.width;
+      layer.y = (centerY - stage.top) / stage.height;
+      renderLayer(layer);
+      scaleControl.value = Math.round(layer.width * 100);
+      scaleValue.value = `${scaleControl.value}%`;
+      guideX.style.left = `${(snapX ?? .5) * 100}%`;
+      guideY.style.top = `${(snapY ?? .5) * 100}%`;
+      guideX.classList.toggle("is-visible", snapX !== null);
+      guideY.classList.toggle("is-visible", snapY !== null);
+    };
+    const end = () => {
+      guideX.classList.remove("is-visible");
+      guideY.classList.remove("is-visible");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      clampLayer(layer);
+      invalidateGif("Tamaño actualizado con ajuste inteligente.");
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  });
+}
+
 async function addImage(file) {
   const url = URL.createObjectURL(file);
   const image = new Image();
   image.src = url;
   await image.decode();
-  image.className = "editor-layer";
+  image.className = "editor-layer-image";
   image.alt = file.name;
   image.draggable = false;
-  const layer = { element: image, image, url, x: .5, y: .5, width: .3 };
+  const element = document.createElement("div");
+  element.className = "editor-layer";
+  element.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
+  element.append(image);
+  ["nw", "ne", "sw", "se"].forEach(corner => {
+    const handle = document.createElement("span");
+    handle.className = "resize-handle";
+    handle.dataset.corner = corner;
+    handle.setAttribute("aria-hidden", "true");
+    element.append(handle);
+  });
+  const layer = { element, image, url, x: .5, y: .5, width: .3 };
   layers.push(layer);
-  editorStage.append(image);
+  editorStage.append(element);
   enableDragging(layer);
+  element.querySelectorAll(".resize-handle").forEach(handle => enableResizing(layer, handle));
   renderLayer(layer);
   selectLayer(layer);
   requestAnimationFrame(() => clampLayer(layer));
