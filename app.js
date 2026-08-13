@@ -162,6 +162,94 @@ async function renderProfilePage() {
   }
 }
 
+const appleArtworkCache = new Map();
+let appleSearchRequestId = 0;
+
+const normalizeCatalogText = value => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
+const requestAppleSearch = term => new Promise((resolve, reject) => {
+  const callbackName = `cloudAppleSearch${Date.now()}${appleSearchRequestId++}`;
+  const script = document.createElement('script');
+  const cleanup = () => {
+    clearTimeout(timeout);
+    script.remove();
+    delete window[callbackName];
+  };
+  const timeout = setTimeout(() => {
+    cleanup();
+    reject(new Error('Apple Search timeout'));
+  }, 8000);
+  window[callbackName] = result => {
+    cleanup();
+    resolve(result);
+  };
+  script.onerror = () => {
+    cleanup();
+    reject(new Error('Apple Search unavailable'));
+  };
+  script.src = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=8&callback=${callbackName}`;
+  document.head.append(script);
+});
+
+const findAppleArtwork = contribution => {
+  const title = normalizeCatalogText(contribution.title);
+  const artist = normalizeCatalogText(contribution.artist);
+  const cacheKey = `${title}|${artist}`;
+  if (appleArtworkCache.has(cacheKey)) return appleArtworkCache.get(cacheKey);
+
+  const request = requestAppleSearch(`${contribution.artist || ''} ${contribution.title || ''}`)
+    .then(result => {
+      const matches = (Array.isArray(result.results) ? result.results : [])
+        .map(song => {
+          const songTitle = normalizeCatalogText(song.trackName);
+          const songArtist = normalizeCatalogText(song.artistName);
+          const titleScore = songTitle === title ? 5 : (songTitle.includes(title) || title.includes(songTitle) ? 3 : 0);
+          const artistScore = songArtist === artist ? 4 : (songArtist.includes(artist) || artist.includes(songArtist) ? 2 : 0);
+          return {song, score: titleScore + artistScore};
+        })
+        .sort((a, b) => b.score - a.score);
+      const artworkUrl = matches[0]?.score >= 7 ? matches[0].song.artworkUrl100 : '';
+      return artworkUrl
+        ? artworkUrl.replace(/\/\d+x\d+bb\.(jpg|png)(?:\?.*)?$/i, '/600x600bb.$1')
+        : '';
+    })
+    .catch(() => '');
+  appleArtworkCache.set(cacheKey, request);
+  return request;
+};
+
+const createContributionArtwork = contribution => {
+  const fallback = document.createElement('span');
+  fallback.className = 'profile-contribution-art';
+  fallback.ariaLabel = `Portada de reserva para ${contribution.title || 'esta contribución'}`;
+
+  const loadAppleArtwork = async currentNode => {
+    const appleUrl = await findAppleArtwork(contribution);
+    if (!appleUrl || !currentNode.isConnected) return;
+    const appleImage = Object.assign(document.createElement('img'), {src: appleUrl, alt: ''});
+    appleImage.addEventListener('error', () => appleImage.replaceWith(fallback), {once: true});
+    currentNode.replaceWith(appleImage);
+  };
+
+  if (typeof contribution.coverUrl !== 'string' || !/^https:\/\//i.test(contribution.coverUrl)) {
+    queueMicrotask(() => loadAppleArtwork(fallback));
+    return fallback;
+  }
+
+  const image = Object.assign(document.createElement('img'), {src: contribution.coverUrl, alt: ''});
+  image.addEventListener('error', () => {
+    image.replaceWith(fallback);
+    loadAppleArtwork(fallback);
+  }, {once: true});
+  return image;
+};
+
 const renderProfileContributions = async profileId => {
   const list = document.querySelector('#profile-contribution-list');
   const empty = document.querySelector('#profile-contribution-empty');
@@ -172,7 +260,12 @@ const renderProfileContributions = async profileId => {
     const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(profileId)}/contributions`);
     if (!response.ok) throw new Error('Contributions unavailable');
     const result = await response.json();
-    const contributions = Array.isArray(result.contributions) ? result.contributions : [];
+    const contributions = (Array.isArray(result.contributions) ? result.contributions : [])
+      .slice()
+      .sort((a, b) => {
+        const playDifference = (Number(b.plays) || 0) - (Number(a.plays) || 0);
+        return playDifference || (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+      });
     const totalPlays = contributions.reduce((total, contribution) => total + (Number(contribution.plays) || 0), 0);
     document.querySelector('#profile-play-total').textContent = totalPlays.toLocaleString('es-MX');
     document.querySelector('#profile-contribution-total').textContent = String(contributions.length);
@@ -184,9 +277,7 @@ const renderProfileContributions = async profileId => {
       item.className = 'profile-contribution-item';
       item.dataset.search = `${contribution.title || ''} ${contribution.artist || ''}`.toLocaleLowerCase('es');
       item.style.setProperty('--item-delay', `${Math.min(index * 45, 360)}ms`);
-      const artwork = contribution.coverUrl
-        ? Object.assign(document.createElement('img'), {src: contribution.coverUrl, alt: ''})
-        : Object.assign(document.createElement('span'), {className: 'profile-contribution-art'});
+      const artwork = createContributionArtwork(contribution);
       const order = document.createElement('span');
       order.className = 'profile-contribution-order';
       order.textContent = String(index + 1).padStart(2, '0');
