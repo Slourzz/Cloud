@@ -12,6 +12,10 @@ const previewCanvas = document.querySelector("#kawarp-preview");
 const colorsRoot = document.querySelector("#kawarp-colors");
 const darkness = document.querySelector("#palette-darkness");
 const darknessValue = document.querySelector("#darkness-value");
+const colorCount = document.querySelector("#color-count");
+const colorCountValue = document.querySelector("#color-count-value");
+const paletteTitle = document.querySelector("#palette-title");
+const activeColors = document.querySelector("#active-colors");
 const generateButton = document.querySelector("#generate-gif");
 const downloadButton = document.querySelector("#download-custom-gif");
 const status = document.querySelector("#gif-status");
@@ -38,7 +42,7 @@ function paletteCanvas(colors, amount, width, height) {
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
-  colors.forEach((color, index) => {
+  Array.from({ length: 8 }, (_, index) => colors[index % colors.length]).forEach((color, index) => {
     const rgb = color.match(/[a-f\d]{2}/gi).map(value => Math.round(parseInt(value, 16) * (1 - amount / 100)));
     context.fillStyle = `rgb(${rgb.join(",")})`;
     context.fillRect((index % 4) * width / 4, Math.floor(index / 4) * height / 2, width / 4, height / 2);
@@ -46,7 +50,16 @@ function paletteCanvas(colors, amount, width, height) {
   return canvas;
 }
 
-const selectedColors = () => [...colorsRoot.querySelectorAll("input")].map(input => input.value);
+const selectedColors = () => [...colorsRoot.querySelectorAll("input")].slice(0, Number(colorCount.value)).map(input => input.value);
+
+function updateColorCount() {
+  const count = Number(colorCount.value);
+  colorCountValue.value = String(count);
+  paletteTitle.textContent = `Paleta de ${count} colores`;
+  activeColors.textContent = `${count} activos`;
+  colorsRoot.querySelectorAll(".kawarp-color").forEach((item, index) => item.classList.toggle("is-unused", index >= count));
+  schedulePreview();
+}
 
 function invalidateGif(message = "Cambios aplicados. Crea el GIF para actualizarlo.") {
   if (generatedGifUrl) URL.revokeObjectURL(generatedGifUrl);
@@ -441,9 +454,12 @@ try {
 }
 
 darkness.addEventListener("input", schedulePreview);
+colorCount.addEventListener("input", updateColorCount);
 document.querySelector("#reset-palette").addEventListener("click", () => {
   darkness.value = "18";
+  colorCount.value = "8";
   buildColorInputs(DEFAULT_COLORS);
+  updateColorCount();
   updatePreview();
 });
 generateButton.addEventListener("click", generateGif);
