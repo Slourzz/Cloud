@@ -1250,19 +1250,14 @@ app.get("/api/auth/discord/me", async (req, res) => {
 });
 
 app.get("/api/profiles/:discordId", async (req, res) => {
-  const viewer = await getAuthenticatedDiscordUser(req.headers.authorization);
-  if (!viewer) {
-    res.status(401).json({ error: "Discord login is required" });
-    return;
-  }
-
   const discordId = req.params.discordId;
   if (!/^\d{15,22}$/.test(discordId)) {
     res.status(400).json({ error: "Discord profile id is invalid" });
     return;
   }
 
-  const profile = discordId === viewer.id
+  const viewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+  const profile = discordId === viewer?.id
     ? viewer
     : await getDiscordProfile(discordId);
   if (!profile) {

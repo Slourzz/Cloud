@@ -110,7 +110,8 @@ async function renderProfilePage() {
   const gate = document.querySelector('#profile-gate');
   const content = document.querySelector('#profile-content');
   const errorPanel = document.querySelector('#profile-error');
-  if (!discordSession?.token) {
+  const requestedId = new URLSearchParams(location.search).get('id');
+  if (!requestedId && !discordSession?.user?.id) {
     loading.hidden = true;
     gate.hidden = false;
     content.hidden = true;
@@ -122,15 +123,13 @@ async function renderProfilePage() {
   content.hidden = true;
   errorPanel.hidden = true;
   try {
-    const requestedId = new URLSearchParams(location.search).get('id');
     const profileId = requestedId || discordSession.user.id;
+    const headers = discordSession?.token
+      ? {Authorization: `Bearer ${discordSession.token}`}
+      : {};
     const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(profileId)}`, {
-      headers: {Authorization: `Bearer ${discordSession.token}`}
+      headers
     });
-    if (response.status === 401) {
-      saveDiscordSession(null);
-      return;
-    }
     if (response.status === 404) {
       loading.hidden = true;
       errorPanel.hidden = false;
@@ -146,9 +145,11 @@ async function renderProfilePage() {
     document.querySelector('#profile-username').textContent = `@${user.username}`;
     document.querySelector('#profile-discord-id').textContent = user.id;
     document.querySelector('#profile-discord-link').href = `https://discord.com/users/${encodeURIComponent(user.id)}`;
-    const ownProfile = user.id === discordSession.user.id;
+    const ownProfile = user.id === discordSession?.user?.id;
     document.querySelector('#profile-edit').hidden = !ownProfile;
     document.querySelector('#profile-copy-url').hidden = ownProfile;
+    document.querySelector('#profile-my-profile').hidden = !discordSession;
+    document.querySelector('#profile-logout').hidden = !discordSession;
     const profileUrl = new URL('./perfil.html', location.href);
     profileUrl.searchParams.set('id', user.id);
     document.querySelector('#profile-share-url').value = profileUrl.href;
@@ -156,8 +157,8 @@ async function renderProfilePage() {
     content.hidden = false;
   } catch {
     loading.hidden = true;
-    gate.hidden = false;
-    gate.querySelector('p').textContent = 'No se pudo verificar la sesión. Inténtalo nuevamente.';
+    errorPanel.hidden = false;
+    errorPanel.querySelector('p').textContent = 'No se pudo cargar este perfil. Inténtalo nuevamente.';
   }
 }
 
