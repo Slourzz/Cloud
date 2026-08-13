@@ -1,5 +1,5 @@
 import { Kawarp } from "./assets/vendor/kawarp-core.js";
-import { GIFEncoder, quantize, applyPalette } from "./assets/vendor/gifenc.esm.js";
+import { GIFEncoder, quantize } from "./assets/vendor/gifenc.esm.js";
 
 const DEFAULT_COLORS = ["#FFD1DC", "#A2CFFE", "#AAF0D1", "#E3E4FA", "#FFFACD", "#FFDAB9", "#DCD0FF", "#B0E0E6"];
 const OPTIONS = { warpIntensity: 1.85, blurPasses: 10, animationSpeed: 0.82, saturation: 2.15, dithering: 0.012, transitionDuration: 0, tintIntensity: 0.28, scale: 1.08 };
@@ -70,18 +70,52 @@ function buildColorInputs(colors) {
 
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
-function softenGifBanding(rgba, width, height, frame) {
-  const matrix = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function applyHighQualityPalette(rgba, palette, width, height) {
+  const indexed = new Uint8Array(width * height);
+  let current = new Float32Array((width + 2) * 3);
+  let next = new Float32Array((width + 2) * 3);
+  const nearestCache = new Int16Array(65536);
+  nearestCache.fill(-1);
+  const clamp = value => Math.max(0, Math.min(255, value));
+
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const pixel = (y * width + x) * 4;
-      const noise = (matrix[((y + frame) & 3) * 4 + ((x + frame) & 3)] - 7.5) * .42;
-      rgba[pixel] = Math.max(0, Math.min(255, rgba[pixel] + noise));
-      rgba[pixel + 1] = Math.max(0, Math.min(255, rgba[pixel + 1] + noise));
-      rgba[pixel + 2] = Math.max(0, Math.min(255, rgba[pixel + 2] + noise));
+      const source = (y * width + x) * 4;
+      const error = (x + 1) * 3;
+      const red = clamp(rgba[source] + current[error]);
+      const green = clamp(rgba[source + 1] + current[error + 1]);
+      const blue = clamp(rgba[source + 2] + current[error + 2]);
+      const key = (Math.round(red) >> 3) << 11 | (Math.round(green) >> 2) << 5 | Math.round(blue) >> 3;
+      let nearest = nearestCache[key];
+      if (nearest < 0) {
+        let distance = Infinity;
+        for (let color = 0; color < palette.length; color += 1) {
+          const candidate = palette[color];
+          const dr = red - candidate[0], dg = green - candidate[1], db = blue - candidate[2];
+          const candidateDistance = dr * dr + dg * dg + db * db;
+          if (candidateDistance < distance) {
+            distance = candidateDistance;
+            nearest = color;
+          }
+        }
+        nearestCache[key] = nearest;
+      }
+      indexed[y * width + x] = nearest;
+
+      // Floyd–Steinberg diffusion removes broad color bands from gradients.
+      const chosen = palette[nearest];
+      const errors = [red - chosen[0], green - chosen[1], blue - chosen[2]];
+      for (let channel = 0; channel < 3; channel += 1) {
+        current[error + 3 + channel] += errors[channel] * 7 / 16;
+        next[error - 3 + channel] += errors[channel] * 3 / 16;
+        next[error + channel] += errors[channel] * 5 / 16;
+        next[error + 3 + channel] += errors[channel] / 16;
+      }
     }
+    current = next;
+    next = new Float32Array((width + 2) * 3);
   }
-  return rgba;
+  return indexed;
 }
 
 function canvasFromImageData(imageData) {
@@ -137,17 +171,14 @@ async function generateGif() {
         context.drawImage(canvasFromImageData(rawFrames[blendIndex]), 0, 0);
         context.globalAlpha = 1;
       }
-      const softenedBackground = context.getImageData(0, 0, size, size);
-      softenGifBanding(softenedBackground.data, size, size, frame);
-      context.putImageData(softenedBackground, 0, 0);
       const logoWidth = size * .58;
       const logoHeight = logo.naturalHeight / logo.naturalWidth * logoWidth;
       context.drawImage(logo, (size - logoWidth) / 2, (size - logoHeight) / 2, logoWidth, logoHeight);
       const rgba = context.getImageData(0, 0, size, size).data;
       const palette = quantize(rgba, 256, { format: "rgb565" });
-      gif.writeFrame(applyPalette(rgba, palette, "rgb565"), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
+      gif.writeFrame(applyHighQualityPalette(rgba, palette, size, size), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
       if (frame % 4 === 0) {
-        status.textContent = `Creando GIF… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
+        status.textContent = `Aplicando color de alta calidad… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
         await nextPaint();
       }
     }
