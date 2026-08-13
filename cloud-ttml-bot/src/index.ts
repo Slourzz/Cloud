@@ -1262,7 +1262,9 @@ app.get("/api/profiles/:discordId", async (req, res) => {
     return;
   }
 
-  const profile = await getDiscordProfile(discordId);
+  const profile = discordId === viewer.id
+    ? viewer
+    : await getDiscordProfile(discordId);
   if (!profile) {
     res.status(404).json({ error: "Cloud profile was not found" });
     return;
