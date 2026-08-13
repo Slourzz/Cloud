@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=discord-gif5">
+  <link rel="stylesheet" href="./styles.css?v=discord-gif6">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
 </head>
 <body data-page="herramientas">
@@ -52,29 +52,25 @@
               <button class="button secondary" id="center-image" type="button" disabled>Centrar</button>
               <button class="button secondary editor-delete" id="delete-image" type="button" disabled>Eliminar</button>
             </div>
-            <label class="image-scale" for="image-scale">
-              <span>Tamaño de la imagen</span><output id="image-scale-value">30%</output>
-              <input id="image-scale" type="range" min="5" max="90" value="30" step="1" disabled>
-            </label>
             <p>Arrastra para mover. Usa las esquinas para redimensionar; las guías corrigen automáticamente el centro y los bordes.</p>
           </div>
           <div class="kawarp-controls">
-            <div class="kawarp-control-heading"><span id="palette-title">Paleta de 8 colores</span><button id="reset-palette" type="button">Restablecer</button></div>
+            <div class="kawarp-control-heading"><span id="palette-title">Paleta de 2 colores</span><button id="reset-palette" type="button">Restablecer</button></div>
             <div id="kawarp-colors" class="kawarp-colors" aria-label="Colores del fondo"></div>
             <label class="kawarp-color-count" for="color-count">
-              <span>Cantidad de colores</span><output id="color-count-value">8</output>
-              <input id="color-count" type="range" min="2" max="8" value="8" step="1">
+              <span>Cantidad de colores</span><output id="color-count-value">2</output>
+              <input id="color-count" type="range" min="2" max="8" value="2" step="1">
             </label>
             <label class="kawarp-darkness" for="palette-darkness">
-              <span>Oscurecer colores</span><output id="darkness-value" for="palette-darkness">18%</output>
-              <input id="palette-darkness" type="range" min="0" max="55" value="18" step="1">
+              <span>Oscurecer colores</span><output id="darkness-value" for="palette-darkness">0%</output>
+              <input id="palette-darkness" type="range" min="0" max="55" value="0" step="1">
             </label>
           </div>
           <dl class="discord-gif-facts">
             <div><dt>Tamaño</dt><dd id="selected-dimensions">512 × 512 px</dd></div>
             <div><dt>Duración</dt><dd>4 segundos</dd></div>
             <div><dt>Repetición</dt><dd>Infinita</dd></div>
-            <div><dt>Colores</dt><dd id="active-colors">8 activos</dd></div>
+            <div><dt>Colores</dt><dd id="active-colors">2 activos</dd></div>
           </dl>
           <div class="actions">
             <button class="button primary" id="generate-gif" type="button">Crear GIF</button>
@@ -88,6 +84,6 @@
     </main>
   </div>
   <script src="./app.js?v=discord-gif2"></script>
-  <script type="module" src="./discord-gif-tool.js?v=9"></script>
+  <script type="module" src="./discord-gif-tool.js?v=10"></script>
 </body>
 </html>

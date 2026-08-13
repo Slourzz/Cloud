@@ -1,7 +1,7 @@
 import { Kawarp } from "./assets/vendor/kawarp-core.js";
 import { GIFEncoder, quantize } from "./assets/vendor/gifenc.esm.js";
 
-const DEFAULT_COLORS = ["#FFD1DC", "#A2CFFE", "#AAF0D1", "#E3E4FA", "#FFFACD", "#FFDAB9", "#DCD0FF", "#B0E0E6"];
+const DEFAULT_COLORS = Array(8).fill("#FFFFFF");
 const OPTIONS = { warpIntensity: 1.85, blurPasses: 10, animationSpeed: 0.82, saturation: 2.15, dithering: 0.012, transitionDuration: 0, tintIntensity: 0.28, scale: 1.08 };
 const PRESETS = {
   square: { width: 512, height: 512, label: "Cuadrado" },
@@ -23,8 +23,6 @@ const sizeControl = document.querySelector(".banner-size-control");
 const dimensions = document.querySelector("#selected-dimensions");
 const editorStage = document.querySelector("#editor-stage");
 const imageUpload = document.querySelector("#image-upload");
-const scaleControl = document.querySelector("#image-scale");
-const scaleValue = document.querySelector("#image-scale-value");
 const centerButton = document.querySelector("#center-image");
 const deleteButton = document.querySelector("#delete-image");
 const guideX = document.querySelector(".snap-guide-x");
@@ -36,6 +34,63 @@ let generatedGifSize = 0;
 let selectedPreset = "square";
 let selectedLayer;
 const layers = [];
+let restoringProject = false;
+let persistenceTimer;
+
+function openProjectDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("cloud-kawarp-editor", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("projects");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveProject() {
+  if (restoringProject) return;
+  try {
+    const database = await openProjectDatabase();
+    const project = {
+      preset: selectedPreset,
+      colors: [...colorsRoot.querySelectorAll("input")].map(input => input.value),
+      colorCount: Number(colorCount.value),
+      darkness: Number(darkness.value),
+      layers: layers.map(layer => ({ blob: layer.blob, name: layer.name, x: layer.x, y: layer.y, width: layer.width }))
+    };
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("projects", "readwrite");
+      transaction.objectStore("projects").put(project, "current");
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  } catch (error) {
+    console.error("No se pudo guardar el proyecto", error);
+  }
+}
+
+function queueProjectSave() {
+  if (restoringProject) return;
+  clearTimeout(persistenceTimer);
+  persistenceTimer = setTimeout(saveProject, 250);
+}
+
+async function readProject() {
+  try {
+    const database = await openProjectDatabase();
+    const project = await new Promise((resolve, reject) => {
+      const transaction = database.transaction("projects", "readonly");
+      const request = transaction.objectStore("projects").get("current");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return project;
+  } catch (error) {
+    console.error("No se pudo restaurar el proyecto", error);
+    return undefined;
+  }
+}
 
 function paletteCanvas(colors, amount, width, height) {
   const canvas = document.createElement("canvas");
@@ -52,13 +107,20 @@ function paletteCanvas(colors, amount, width, height) {
 
 const selectedColors = () => [...colorsRoot.querySelectorAll("input")].slice(0, Number(colorCount.value)).map(input => input.value);
 
+function updateRangeFill(input) {
+  const progress = (Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min)) * 100;
+  input.style.setProperty("--range-progress", `${progress}%`);
+}
+
 function updateColorCount() {
   const count = Number(colorCount.value);
   colorCountValue.value = String(count);
   paletteTitle.textContent = `Paleta de ${count} colores`;
   activeColors.textContent = `${count} activos`;
+  updateRangeFill(colorCount);
   colorsRoot.querySelectorAll(".kawarp-color").forEach((item, index) => item.classList.toggle("is-unused", index >= count));
   schedulePreview();
+  queueProjectSave();
 }
 
 function invalidateGif(message = "Cambios aplicados. Crea el GIF para actualizarlo.") {
@@ -67,6 +129,7 @@ function invalidateGif(message = "Cambios aplicados. Crea el GIF para actualizar
   generatedGifSize = 0;
   downloadButton.disabled = true;
   status.textContent = message;
+  queueProjectSave();
 }
 
 function renderLayer(layer) {
@@ -79,13 +142,8 @@ function selectLayer(layer) {
   selectedLayer = layer;
   layers.forEach(item => item.element.classList.toggle("is-selected", item === layer));
   const disabled = !layer;
-  scaleControl.disabled = disabled;
   centerButton.disabled = disabled;
   deleteButton.disabled = disabled;
-  if (layer) {
-    scaleControl.value = Math.round(layer.width * 100);
-    scaleValue.value = `${scaleControl.value}%`;
-  }
 }
 
 function clampLayer(layer) {
@@ -96,10 +154,6 @@ function clampLayer(layer) {
     layer.width *= Math.min(stage.width / item.width, stage.height / item.height) * .98;
     renderLayer(layer);
     item = layer.element.getBoundingClientRect();
-    if (layer === selectedLayer) {
-      scaleControl.value = Math.round(layer.width * 100);
-      scaleValue.value = `${scaleControl.value}%`;
-    }
   }
   const halfX = Math.min(.5, item.width / stage.width / 2);
   const halfY = Math.min(.5, item.height / stage.height / 2);
@@ -196,8 +250,6 @@ function enableResizing(layer, handle) {
       layer.x = (centerX - stage.left) / stage.width;
       layer.y = (centerY - stage.top) / stage.height;
       renderLayer(layer);
-      scaleControl.value = Math.round(layer.width * 100);
-      scaleValue.value = `${scaleControl.value}%`;
       guideX.style.left = `${(snapX ?? .5) * 100}%`;
       guideY.style.top = `${(snapY ?? .5) * 100}%`;
       guideX.classList.toggle("is-visible", snapX !== null);
@@ -218,13 +270,13 @@ function enableResizing(layer, handle) {
   });
 }
 
-async function addImage(file) {
+async function addImage(file, restoredState) {
   const url = URL.createObjectURL(file);
   const image = new Image();
   image.src = url;
   await image.decode();
   image.className = "editor-layer-image";
-  image.alt = file.name;
+  image.alt = restoredState?.name || file.name || "Imagen añadida";
   image.draggable = false;
   const element = document.createElement("div");
   element.className = "editor-layer";
@@ -237,19 +289,27 @@ async function addImage(file) {
     handle.setAttribute("aria-hidden", "true");
     element.append(handle);
   });
-  const layer = { element, image, url, x: .5, y: .5, width: .3 };
+  const layer = {
+    element, image, url, blob: file, name: restoredState?.name || file.name || "imagen",
+    x: restoredState?.x ?? .5, y: restoredState?.y ?? .5, width: restoredState?.width ?? .3
+  };
   layers.push(layer);
   editorStage.append(element);
   enableDragging(layer);
   element.querySelectorAll(".resize-handle").forEach(handle => enableResizing(layer, handle));
   renderLayer(layer);
   selectLayer(layer);
-  requestAnimationFrame(() => clampLayer(layer));
+  requestAnimationFrame(() => {
+    clampLayer(layer);
+    queueProjectSave();
+  });
+  queueProjectSave();
 }
 
 function updatePreview() {
   const preset = PRESETS[selectedPreset];
   darknessValue.value = `${darkness.value}%`;
+  updateRangeFill(darkness);
   preview.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value), preset.width, preset.height));
   preview.isTransitioning = false;
   preview.start();
@@ -258,6 +318,7 @@ function updatePreview() {
   generatedGifSize = 0;
   downloadButton.disabled = true;
   status.textContent = "La vista previa ya usa tus colores.";
+  queueProjectSave();
 }
 
 function selectBannerSize(name) {
@@ -278,8 +339,12 @@ function selectBannerSize(name) {
     button.setAttribute("aria-pressed", String(active));
   });
   updatePreview();
-  setTimeout(() => layers.forEach(clampLayer), 680);
+  setTimeout(() => {
+    layers.forEach(clampLayer);
+    queueProjectSave();
+  }, 680);
   status.textContent = `Formato ${preset.label}: ${preset.width} × ${preset.height} px.`;
+  queueProjectSave();
 }
 
 function schedulePreview() {
@@ -443,21 +508,39 @@ async function generateGif() {
   }
 }
 
-buildColorInputs(DEFAULT_COLORS);
-try {
-  preview = new Kawarp(previewCanvas, OPTIONS);
-  updatePreview();
-} catch (error) {
-  console.error(error);
-  status.textContent = "La vista previa necesita WebGL activado.";
-  generateButton.disabled = true;
+async function initializeEditor() {
+  restoringProject = true;
+  const project = await readProject();
+  const storedColors = project?.colors?.length ? [...project.colors, ...DEFAULT_COLORS].slice(0, 8) : DEFAULT_COLORS;
+  buildColorInputs(storedColors);
+  if (project) {
+    darkness.value = String(project.darkness ?? 0);
+    colorCount.value = String(Math.max(2, Math.min(8, project.colorCount ?? 2)));
+  }
+  try {
+    preview = new Kawarp(previewCanvas, OPTIONS);
+    updateColorCount();
+    if (project?.preset && PRESETS[project.preset]) selectBannerSize(project.preset);
+    else updatePreview();
+    for (const savedLayer of project?.layers || []) {
+      if (savedLayer.blob) await addImage(savedLayer.blob, savedLayer);
+    }
+    status.textContent = project ? "Proyecto restaurado automáticamente." : "Proyecto nuevo: 2 colores blancos.";
+  } catch (error) {
+    console.error(error);
+    status.textContent = "La vista previa necesita WebGL activado.";
+    generateButton.disabled = true;
+  } finally {
+    restoringProject = false;
+    queueProjectSave();
+  }
 }
 
 darkness.addEventListener("input", schedulePreview);
 colorCount.addEventListener("input", updateColorCount);
 document.querySelector("#reset-palette").addEventListener("click", () => {
-  darkness.value = "18";
-  colorCount.value = "8";
+  darkness.value = "0";
+  colorCount.value = "2";
   buildColorInputs(DEFAULT_COLORS);
   updateColorCount();
   updatePreview();
@@ -480,14 +563,6 @@ imageUpload.addEventListener("change", async () => {
   for (const file of files) await addImage(file);
   imageUpload.value = "";
   invalidateGif(`${files.length} imagen${files.length === 1 ? " añadida" : "es añadidas"}. Arrástrala y usa las guías para alinearla.`);
-});
-scaleControl.addEventListener("input", () => {
-  if (!selectedLayer) return;
-  selectedLayer.width = Number(scaleControl.value) / 100;
-  scaleValue.value = `${scaleControl.value}%`;
-  renderLayer(selectedLayer);
-  clampLayer(selectedLayer);
-  invalidateGif();
 });
 centerButton.addEventListener("click", () => {
   if (!selectedLayer) return;
@@ -513,3 +588,4 @@ deleteButton.addEventListener("click", () => {
 editorStage.addEventListener("pointerdown", event => {
   if (event.target === editorStage) selectLayer(undefined);
 });
+initializeEditor();
