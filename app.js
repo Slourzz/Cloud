@@ -143,24 +143,84 @@ async function renderProfilePage() {
     avatar.alt = `Avatar de ${user.displayName || user.username}`;
     document.querySelector('#profile-display-name').textContent = user.displayName || user.username;
     document.querySelector('#profile-username').textContent = `@${user.username}`;
-    document.querySelector('#profile-discord-id').textContent = user.id;
     document.querySelector('#profile-discord-link').href = `https://discord.com/users/${encodeURIComponent(user.id)}`;
     const ownProfile = user.id === discordSession?.user?.id;
     document.querySelector('#profile-edit').hidden = !ownProfile;
-    document.querySelector('#profile-copy-url').hidden = ownProfile;
     document.querySelector('#profile-my-profile').hidden = !discordSession;
     document.querySelector('#profile-logout').hidden = !discordSession;
     const profileUrl = new URL('./perfil.html', location.href);
     profileUrl.searchParams.set('id', user.id);
     document.querySelector('#profile-share-url').value = profileUrl.href;
+    await renderProfileContributions(user.id);
     loading.hidden = true;
     content.hidden = false;
+    updateProfileScrollScene();
   } catch {
     loading.hidden = true;
     errorPanel.hidden = false;
     errorPanel.querySelector('p').textContent = 'No se pudo cargar este perfil. Inténtalo nuevamente.';
   }
 }
+
+const renderProfileContributions = async profileId => {
+  const list = document.querySelector('#profile-contribution-list');
+  const empty = document.querySelector('#profile-contribution-empty');
+  if (!list || !empty) return;
+  list.replaceChildren();
+
+  try {
+    const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(profileId)}/contributions`);
+    if (!response.ok) throw new Error('Contributions unavailable');
+    const result = await response.json();
+    const contributions = Array.isArray(result.contributions) ? result.contributions : [];
+    const totalPlays = contributions.reduce((total, contribution) => total + (Number(contribution.plays) || 0), 0);
+    document.querySelector('#profile-play-total').textContent = totalPlays.toLocaleString('es-MX');
+    document.querySelector('#profile-contribution-total').textContent = String(contributions.length);
+    document.querySelector('#profile-contribution-badge').textContent = String(contributions.length);
+    empty.hidden = contributions.length > 0;
+
+    contributions.forEach((contribution, index) => {
+      const item = document.createElement('article');
+      item.className = 'profile-contribution-item';
+      item.dataset.search = `${contribution.title || ''} ${contribution.artist || ''}`.toLocaleLowerCase('es');
+      item.style.setProperty('--item-delay', `${Math.min(index * 45, 360)}ms`);
+      const artwork = contribution.coverUrl
+        ? Object.assign(document.createElement('img'), {src: contribution.coverUrl, alt: ''})
+        : Object.assign(document.createElement('span'), {className: 'profile-contribution-art'});
+      const order = document.createElement('span');
+      order.className = 'profile-contribution-order';
+      order.textContent = String(index + 1).padStart(2, '0');
+      const copy = document.createElement('div');
+      copy.className = 'profile-contribution-copy';
+      const title = document.createElement('strong');
+      title.textContent = contribution.title || 'Contribución de Cloud';
+      const artist = document.createElement('span');
+      artist.textContent = contribution.artist || 'Artista desconocido';
+      copy.append(title, artist);
+      const type = document.createElement('span');
+      type.className = 'profile-contribution-type';
+      const plays = Number(contribution.plays) || 0;
+      type.textContent = `${plays.toLocaleString('es-MX')} ${plays === 1 ? 'reproducción' : 'reproducciones'}`;
+      item.append(order, artwork, copy, type);
+      list.append(item);
+    });
+  } catch {
+    document.querySelector('#profile-play-total').textContent = '0';
+    document.querySelector('#profile-contribution-total').textContent = '0';
+    document.querySelector('#profile-contribution-badge').textContent = '0';
+    empty.hidden = false;
+  }
+};
+
+const updateProfileScrollScene = () => {
+  const track = document.querySelector('.profile-scroll-track');
+  const stage = document.querySelector('.profile-sticky-stage');
+  if (!track || !stage || window.matchMedia('(max-width: 820px)').matches) return;
+  const rect = track.getBoundingClientRect();
+  const available = Math.max(1, track.offsetHeight - stage.offsetHeight);
+  const progress = Math.min(1, Math.max(0, -rect.top / available));
+  stage.classList.toggle('is-contributions-view', progress >= .42);
+};
 
 const setDiscordBusy = busy => {
   discordAuthButtons.forEach(button => {
@@ -234,12 +294,21 @@ if (document.body.dataset.page === 'perfil') {
     const input = document.querySelector('#profile-share-url');
     try {
       await navigator.clipboard.writeText(input.value);
-      event.currentTarget.textContent = 'Enlace copiado';
-      setTimeout(() => { event.currentTarget.textContent = 'Copiar enlace'; }, 1600);
+      const label = event.currentTarget.querySelector('span');
+      label.textContent = 'Copiado';
+      setTimeout(() => { label.textContent = 'Compartir'; }, 1600);
     } catch {
       input.select();
       document.execCommand('copy');
     }
+  });
+  window.addEventListener('scroll', updateProfileScrollScene, {passive: true});
+  window.addEventListener('resize', updateProfileScrollScene);
+  document.querySelector('#profile-contribution-search')?.addEventListener('input', event => {
+    const query = event.currentTarget.value.trim().toLocaleLowerCase('es');
+    document.querySelectorAll('.profile-contribution-item').forEach(item => {
+      item.hidden = Boolean(query) && !item.dataset.search.includes(query);
+    });
   });
   document.querySelector('#profile-edit')?.addEventListener('click', () => {
     window.alert('La edición de biografía y enlaces llegará en la siguiente actualización.');
