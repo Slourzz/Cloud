@@ -3,6 +3,7 @@ import { GIFEncoder, quantize } from "./assets/vendor/gifenc.esm.js";
 
 const DEFAULT_COLORS = ["#FFD1DC", "#A2CFFE", "#AAF0D1", "#E3E4FA", "#FFFACD", "#FFDAB9", "#DCD0FF", "#B0E0E6"];
 const OPTIONS = { warpIntensity: 1.85, blurPasses: 10, animationSpeed: 0.82, saturation: 2.15, dithering: 0.012, transitionDuration: 0, tintIntensity: 0.28, scale: 1.08 };
+const PRESETS = { profile: { width: 600, height: 240, label: "Perfil" }, server: { width: 960, height: 540, label: "Servidor" } };
 const previewCanvas = document.querySelector("#kawarp-preview");
 const colorsRoot = document.querySelector("#kawarp-colors");
 const darkness = document.querySelector("#palette-darkness");
@@ -11,19 +12,23 @@ const generateButton = document.querySelector("#generate-gif");
 const downloadButton = document.querySelector("#download-custom-gif");
 const status = document.querySelector("#gif-status");
 const logo = document.querySelector(".discord-gif-logo");
+const sizeControl = document.querySelector(".banner-size-control");
+const dimensions = document.querySelector("#selected-dimensions");
 let preview;
 let updateTimer;
 let generatedGifUrl;
 let generatedGifSize = 0;
+let selectedPreset = "profile";
 
-function paletteCanvas(colors, amount, size = 512) {
+function paletteCanvas(colors, amount, width, height) {
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext("2d");
   colors.forEach((color, index) => {
     const rgb = color.match(/[a-f\d]{2}/gi).map(value => Math.round(parseInt(value, 16) * (1 - amount / 100)));
     context.fillStyle = `rgb(${rgb.join(",")})`;
-    context.fillRect((index % 4) * size / 4, Math.floor(index / 4) * size / 2, size / 4, size / 2);
+    context.fillRect((index % 4) * width / 4, Math.floor(index / 4) * height / 2, width / 4, height / 2);
   });
   return canvas;
 }
@@ -31,8 +36,9 @@ function paletteCanvas(colors, amount, size = 512) {
 const selectedColors = () => [...colorsRoot.querySelectorAll("input")].map(input => input.value);
 
 function updatePreview() {
+  const preset = PRESETS[selectedPreset];
   darknessValue.value = `${darkness.value}%`;
-  preview.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value)));
+  preview.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value), preset.width, preset.height));
   preview.isTransitioning = false;
   preview.start();
   if (generatedGifUrl) URL.revokeObjectURL(generatedGifUrl);
@@ -40,6 +46,25 @@ function updatePreview() {
   generatedGifSize = 0;
   downloadButton.disabled = true;
   status.textContent = "La vista previa ya usa tus colores.";
+}
+
+function selectBannerSize(name) {
+  selectedPreset = name;
+  const preset = PRESETS[name];
+  preview.stop();
+  previewCanvas.width = preset.width;
+  previewCanvas.height = preset.height;
+  preview.resize();
+  document.querySelector(".discord-gif-preview").style.setProperty("--banner-ratio", preset.width / preset.height);
+  dimensions.textContent = `${preset.width} × ${preset.height} px`;
+  sizeControl.dataset.active = name;
+  sizeControl.querySelectorAll(".banner-size-option").forEach(button => {
+    const active = button.dataset.preset === name;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  updatePreview();
+  status.textContent = `Formato ${preset.label}: ${preset.width} × ${preset.height} px.`;
 }
 
 function schedulePreview() {
@@ -132,25 +157,29 @@ async function generateGif() {
   try {
     status.textContent = "Preparando Kawarp real…";
     await nextPaint();
-    const size = 512, totalFrames = 80, overlap = 16, fps = 16;
+    const { width, height } = PRESETS[selectedPreset];
+    const totalFrames = 80, overlap = 16, fps = 16;
     const renderCanvas = document.createElement("canvas");
-    renderCanvas.width = renderCanvas.height = size;
+    renderCanvas.width = width;
+    renderCanvas.height = height;
     const kawarp = new Kawarp(renderCanvas, OPTIONS);
-    kawarp.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value), size));
+    kawarp.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value), width, height));
     kawarp.isTransitioning = false;
     if (!logo.complete || !logo.naturalWidth) await logo.decode();
     const capture = document.createElement("canvas");
-    capture.width = capture.height = size;
+    capture.width = width;
+    capture.height = height;
     const captureContext = capture.getContext("2d", { willReadFrequently: true });
     const composite = document.createElement("canvas");
-    composite.width = composite.height = size;
+    composite.width = width;
+    composite.height = height;
     const context = composite.getContext("2d", { willReadFrequently: true });
     const rawFrames = [];
 
     for (let frame = 0; frame < totalFrames; frame += 1) {
       kawarp.render(frame / fps * OPTIONS.animationSpeed, frame / fps * 1000);
       captureContext.drawImage(renderCanvas, 0, 0);
-      rawFrames.push(captureContext.getImageData(0, 0, size, size));
+      rawFrames.push(captureContext.getImageData(0, 0, width, height));
       if (frame % 8 === 0) {
         status.textContent = `Renderizando fondo… ${Math.round((frame + 1) / totalFrames * 45)}%`;
         await nextPaint();
@@ -161,7 +190,7 @@ async function generateGif() {
     const outputFrames = totalFrames - overlap;
     for (let frame = 0; frame < outputFrames; frame += 1) {
       context.globalAlpha = 1;
-      context.clearRect(0, 0, size, size);
+      context.clearRect(0, 0, width, height);
       if (frame < outputFrames - overlap) {
         context.putImageData(rawFrames[frame + overlap], 0, 0);
       } else {
@@ -171,12 +200,12 @@ async function generateGif() {
         context.drawImage(canvasFromImageData(rawFrames[blendIndex]), 0, 0);
         context.globalAlpha = 1;
       }
-      const logoWidth = size * .58;
+      const logoWidth = width * .34;
       const logoHeight = logo.naturalHeight / logo.naturalWidth * logoWidth;
-      context.drawImage(logo, (size - logoWidth) / 2, (size - logoHeight) / 2, logoWidth, logoHeight);
-      const rgba = context.getImageData(0, 0, size, size).data;
+      context.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
+      const rgba = context.getImageData(0, 0, width, height).data;
       const palette = quantize(rgba, 256, { format: "rgb565" });
-      gif.writeFrame(applyHighQualityPalette(rgba, palette, size, size), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
+      gif.writeFrame(applyHighQualityPalette(rgba, palette, width, height), width, height, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
       if (frame % 4 === 0) {
         status.textContent = `Aplicando color de alta calidad… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
         await nextPaint();
@@ -215,11 +244,14 @@ document.querySelector("#reset-palette").addEventListener("click", () => {
   updatePreview();
 });
 generateButton.addEventListener("click", generateGif);
+sizeControl.querySelectorAll(".banner-size-option").forEach(button => {
+  button.addEventListener("click", () => selectBannerSize(button.dataset.preset));
+});
 downloadButton.addEventListener("click", () => {
   if (!generatedGifUrl) return;
   const anchor = document.createElement("a");
   anchor.href = generatedGifUrl;
-  anchor.download = "cloud-kawarp-personalizado.gif";
+  anchor.download = `cloud-kawarp-banner-${selectedPreset}.gif`;
   anchor.click();
   status.textContent = `GIF descargado (${(generatedGifSize / 1024 / 1024).toFixed(1)} MB).`;
 });

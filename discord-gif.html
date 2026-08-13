@@ -23,13 +23,22 @@
 
       <section class="discord-gif-panel reveal" aria-labelledby="discord-gif-title">
         <div class="discord-gif-preview">
-          <canvas id="kawarp-preview" width="512" height="512" aria-label="Vista previa animada de Kawarp"></canvas>
+          <canvas id="kawarp-preview" width="600" height="240" aria-label="Vista previa animada de Kawarp"></canvas>
           <img class="discord-gif-logo" src="./assets/cloud-splash-logo.png" alt="Logo de Cloud">
         </div>
         <div class="discord-gif-copy">
           <span class="section-label">Recurso del servidor</span>
           <h2 id="discord-gif-title">Cloud × Kawarp</h2>
           <p>Usa el Kawarp real de Cloud para escritorio. Elige ocho colores, ajusta cuánto quieres oscurecerlos y crea un GIF en bucle con el logo totalmente fijo.</p>
+          <div class="banner-size-control" aria-label="Tamaño del banner">
+            <span class="banner-size-highlight" aria-hidden="true"></span>
+            <button class="banner-size-option is-active" type="button" data-preset="profile" aria-pressed="true">
+              <strong>Perfil</strong><small>600 × 240</small>
+            </button>
+            <button class="banner-size-option" type="button" data-preset="server" aria-pressed="false">
+              <strong>Servidor</strong><small>960 × 540</small>
+            </button>
+          </div>
           <div class="kawarp-controls">
             <div class="kawarp-control-heading"><span>Paleta de 8 colores</span><button id="reset-palette" type="button">Restablecer</button></div>
             <div id="kawarp-colors" class="kawarp-colors" aria-label="Colores del fondo"></div>
@@ -39,7 +48,7 @@
             </label>
           </div>
           <dl class="discord-gif-facts">
-            <div><dt>Tamaño</dt><dd>512 × 512 px</dd></div>
+            <div><dt>Tamaño</dt><dd id="selected-dimensions">600 × 240 px</dd></div>
             <div><dt>Duración</dt><dd>4 segundos</dd></div>
             <div><dt>Repetición</dt><dd>Infinita</dd></div>
             <div><dt>Colores</dt><dd>8 personalizables</dd></div>
@@ -56,6 +65,6 @@
     </main>
   </div>
   <script src="./app.js?v=discord-gif2"></script>
-  <script type="module" src="./discord-gif-tool.js?v=4"></script>
+  <script type="module" src="./discord-gif-tool.js?v=5"></script>
 </body>
 </html>
