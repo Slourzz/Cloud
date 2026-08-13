@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=discord-gif6">
+  <link rel="stylesheet" href="./styles.css?v=discord-gif7">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
 </head>
 <body data-page="herramientas">
@@ -47,6 +47,7 @@
           </div>
           <div class="image-editor-controls">
             <input id="image-upload" type="file" accept="image/png,image/webp" multiple hidden>
+            <input id="replace-image-upload" type="file" accept="image/png,image/webp" hidden>
             <div class="editor-actions">
               <button class="button secondary" id="upload-images" type="button">Añadir imágenes</button>
               <button class="button secondary" id="center-image" type="button" disabled>Centrar</button>
@@ -83,7 +84,18 @@
       </section>
     </main>
   </div>
+  <div id="image-context-menu" class="image-context-menu" role="menu" aria-label="Opciones de imagen" hidden>
+    <button type="button" role="menuitem" data-action="replace">Reemplazar imagen</button>
+    <button type="button" role="menuitem" data-action="duplicate">Duplicar</button>
+    <button type="button" role="menuitem" data-action="center">Centrar en el lienzo</button>
+    <span class="context-menu-separator" aria-hidden="true"></span>
+    <button type="button" role="menuitem" data-action="front">Traer al frente</button>
+    <button type="button" role="menuitem" data-action="back">Enviar al fondo</button>
+    <button type="button" role="menuitem" data-action="flip">Voltear horizontalmente</button>
+    <span class="context-menu-separator" aria-hidden="true"></span>
+    <button class="context-menu-danger" type="button" role="menuitem" data-action="delete">Eliminar imagen</button>
+  </div>
   <script src="./app.js?v=discord-gif2"></script>
-  <script type="module" src="./discord-gif-tool.js?v=10"></script>
+  <script type="module" src="./discord-gif-tool.js?v=11"></script>
 </body>
 </html>

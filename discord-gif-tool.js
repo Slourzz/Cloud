@@ -23,6 +23,8 @@ const sizeControl = document.querySelector(".banner-size-control");
 const dimensions = document.querySelector("#selected-dimensions");
 const editorStage = document.querySelector("#editor-stage");
 const imageUpload = document.querySelector("#image-upload");
+const replaceImageUpload = document.querySelector("#replace-image-upload");
+const contextMenu = document.querySelector("#image-context-menu");
 const centerButton = document.querySelector("#center-image");
 const deleteButton = document.querySelector("#delete-image");
 const guideX = document.querySelector(".snap-guide-x");
@@ -55,7 +57,7 @@ async function saveProject() {
       colors: [...colorsRoot.querySelectorAll("input")].map(input => input.value),
       colorCount: Number(colorCount.value),
       darkness: Number(darkness.value),
-      layers: layers.map(layer => ({ blob: layer.blob, name: layer.name, x: layer.x, y: layer.y, width: layer.width }))
+      layers: layers.map(layer => ({ blob: layer.blob, name: layer.name, x: layer.x, y: layer.y, width: layer.width, flip: layer.flip }))
     };
     await new Promise((resolve, reject) => {
       const transaction = database.transaction("projects", "readwrite");
@@ -136,6 +138,54 @@ function renderLayer(layer) {
   layer.element.style.left = `${layer.x * 100}%`;
   layer.element.style.top = `${layer.y * 100}%`;
   layer.element.style.width = `${layer.width * 100}%`;
+  layer.image.style.transform = layer.flip ? "scaleX(-1)" : "none";
+}
+
+function closeContextMenu() {
+  contextMenu.hidden = true;
+}
+
+function openContextMenu(event, layer) {
+  event.preventDefault();
+  event.stopPropagation();
+  selectLayer(layer);
+  contextMenu.hidden = false;
+  const width = 210;
+  const height = contextMenu.offsetHeight;
+  contextMenu.style.left = `${Math.max(8, Math.min(innerWidth - width - 8, event.clientX))}px`;
+  contextMenu.style.top = `${Math.max(8, Math.min(innerHeight - height - 8, event.clientY))}px`;
+  contextMenu.querySelector("button").focus();
+}
+
+function centerLayer(layer) {
+  if (!layer) return;
+  layer.x = layer.y = .5;
+  renderLayer(layer);
+  invalidateGif("Imagen centrada automáticamente.");
+}
+
+function removeLayer(layer) {
+  if (!layer) return;
+  const index = layers.indexOf(layer);
+  URL.revokeObjectURL(layer.url);
+  layer.element.remove();
+  layers.splice(index, 1);
+  selectLayer(layers.at(-1));
+  invalidateGif("Imagen eliminada.");
+}
+
+function moveLayer(layer, toFront) {
+  const index = layers.indexOf(layer);
+  if (index < 0) return;
+  layers.splice(index, 1);
+  if (toFront) {
+    layers.push(layer);
+    editorStage.append(layer.element);
+  } else {
+    layers.unshift(layer);
+    editorStage.insertBefore(layer.element, editorStage.querySelector(".editor-layer"));
+  }
+  invalidateGif(toFront ? "Imagen colocada al frente." : "Imagen enviada al fondo.");
 }
 
 function selectLayer(layer) {
@@ -291,11 +341,13 @@ async function addImage(file, restoredState) {
   });
   const layer = {
     element, image, url, blob: file, name: restoredState?.name || file.name || "imagen",
-    x: restoredState?.x ?? .5, y: restoredState?.y ?? .5, width: restoredState?.width ?? .3
+    x: restoredState?.x ?? .5, y: restoredState?.y ?? .5, width: restoredState?.width ?? .3,
+    flip: restoredState?.flip ?? false
   };
   layers.push(layer);
   editorStage.append(element);
   enableDragging(layer);
+  element.addEventListener("contextmenu", event => openContextMenu(event, layer));
   element.querySelectorAll(".resize-handle").forEach(handle => enableResizing(layer, handle));
   renderLayer(layer);
   selectLayer(layer);
@@ -482,7 +534,11 @@ async function generateGif() {
       for (const layer of layers) {
         const layerWidth = width * layer.width;
         const layerHeight = layer.image.naturalHeight / layer.image.naturalWidth * layerWidth;
-        context.drawImage(layer.image, width * layer.x - layerWidth / 2, height * layer.y - layerHeight / 2, layerWidth, layerHeight);
+        context.save();
+        context.translate(width * layer.x, height * layer.y);
+        context.scale(layer.flip ? -1 : 1, 1);
+        context.drawImage(layer.image, -layerWidth / 2, -layerHeight / 2, layerWidth, layerHeight);
+        context.restore();
       }
       const rgba = context.getImageData(0, 0, width, height).data;
       const palette = quantize(rgba, 256, { format: "rgb565" });
@@ -566,26 +622,71 @@ imageUpload.addEventListener("change", async () => {
 });
 centerButton.addEventListener("click", () => {
   if (!selectedLayer) return;
-  selectedLayer.x = selectedLayer.y = .5;
-  renderLayer(selectedLayer);
+  centerLayer(selectedLayer);
   guideX.classList.add("is-visible");
   guideY.classList.add("is-visible");
   setTimeout(() => {
     guideX.classList.remove("is-visible");
     guideY.classList.remove("is-visible");
   }, 500);
-  invalidateGif("Imagen centrada automáticamente.");
 });
-deleteButton.addEventListener("click", () => {
-  if (!selectedLayer) return;
-  const index = layers.indexOf(selectedLayer);
-  URL.revokeObjectURL(selectedLayer.url);
-  selectedLayer.element.remove();
-  layers.splice(index, 1);
-  selectLayer(layers.at(-1));
-  invalidateGif("Imagen eliminada.");
+deleteButton.addEventListener("click", () => removeLayer(selectedLayer));
+contextMenu.addEventListener("click", async event => {
+  const button = event.target.closest("[data-action]");
+  if (!button || !selectedLayer) return;
+  const layer = selectedLayer;
+  closeContextMenu();
+  if (button.dataset.action === "replace") replaceImageUpload.click();
+  if (button.dataset.action === "duplicate") {
+    await addImage(layer.blob, { name: `${layer.name} copia`, x: layer.x + .035, y: layer.y + .035, width: layer.width, flip: layer.flip });
+    invalidateGif("Imagen duplicada.");
+  }
+  if (button.dataset.action === "center") centerLayer(layer);
+  if (button.dataset.action === "front") moveLayer(layer, true);
+  if (button.dataset.action === "back") moveLayer(layer, false);
+  if (button.dataset.action === "flip") {
+    layer.flip = !layer.flip;
+    renderLayer(layer);
+    invalidateGif("Imagen volteada horizontalmente.");
+  }
+  if (button.dataset.action === "delete") removeLayer(layer);
+});
+replaceImageUpload.addEventListener("change", async () => {
+  const file = replaceImageUpload.files?.[0];
+  const layer = selectedLayer;
+  replaceImageUpload.value = "";
+  if (!file || !layer) return;
+  const url = URL.createObjectURL(file);
+  const replacement = new Image();
+  replacement.src = url;
+  try {
+    await replacement.decode();
+    URL.revokeObjectURL(layer.url);
+    layer.url = url;
+    layer.blob = file;
+    layer.name = file.name;
+    layer.image.src = url;
+    layer.image.alt = file.name;
+    layer.element.style.aspectRatio = `${replacement.naturalWidth} / ${replacement.naturalHeight}`;
+    await layer.image.decode();
+    clampLayer(layer);
+    renderLayer(layer);
+    invalidateGif("Imagen reemplazada; se conservaron su posición y tamaño.");
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    console.error(error);
+    status.textContent = "No se pudo reemplazar la imagen.";
+  }
 });
 editorStage.addEventListener("pointerdown", event => {
   if (event.target === editorStage) selectLayer(undefined);
 });
+document.addEventListener("pointerdown", event => {
+  if (!contextMenu.hidden && !contextMenu.contains(event.target)) closeContextMenu();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeContextMenu();
+});
+addEventListener("resize", closeContextMenu);
+addEventListener("scroll", closeContextMenu, true);
 initializeEditor();

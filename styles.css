@@ -330,6 +330,11 @@ html,body{max-width:100%;overflow-x:hidden}
 .editor-actions{display:flex;gap:7px;flex-wrap:wrap}.editor-actions .button{min-height:38px;padding:0 13px;font-size:11px;cursor:pointer}.editor-actions .editor-delete{color:#f6a6a6}
 .editor-actions .button:disabled{opacity:.38;cursor:not-allowed;transform:none}
 .image-editor-controls>p{margin:10px 0 0;color:#908caa;font-size:10px;line-height:1.55}
+.image-context-menu{position:fixed;z-index:5000;width:210px;padding:7px;border:1px solid rgba(224,222,244,.16);border-radius:14px;background:rgba(31,29,46,.96);box-shadow:0 20px 55px rgba(8,6,16,.48);backdrop-filter:blur(18px);animation:context-menu-in .16s cubic-bezier(.22,1,.36,1)}
+.image-context-menu[hidden]{display:none}.image-context-menu button{width:100%;min-height:36px;padding:0 11px;display:flex;align-items:center;border:0;border-radius:9px;background:transparent;color:#d8d3e7;font-size:11px;font-weight:700;text-align:left;cursor:pointer;transition:background .16s,color .16s,transform .16s}
+.image-context-menu button:hover,.image-context-menu button:focus-visible{outline:0;background:#393552;color:#fff;transform:translateX(2px)}.image-context-menu .context-menu-danger{color:#f3a5a3}.image-context-menu .context-menu-danger:hover{background:rgba(235,111,111,.14);color:#ffc1bf}
+.context-menu-separator{display:block;height:1px;margin:5px 7px;background:rgba(224,222,244,.1)}
+@keyframes context-menu-in{from{opacity:0;transform:translateY(-5px) scale(.97)}to{opacity:1;transform:none}}
 .kawarp-controls{margin:22px 0;padding:16px;border:1px solid rgba(224,222,244,.12);border-radius:16px;background:#211e2b}
 .kawarp-control-heading,.kawarp-darkness{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;font-weight:800}
 .kawarp-control-heading button{padding:0;border:0;background:none;color:#ea9a97;font-size:11px;font-weight:800;cursor:pointer}
