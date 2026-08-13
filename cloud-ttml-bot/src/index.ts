@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
@@ -82,6 +82,7 @@ import {
   getApprovedSubmission,
   getDiscordAuthRequest,
   getDiscordSession,
+  getDailyWebStats,
   getPendingSubmissions,
   getSubmission,
   initializeSubmissionStore,
@@ -89,6 +90,7 @@ import {
   isCoverThreadApproved,
   isArtistMediaThreadApproved,
   saveSubmission,
+  recordDailyWebVisit,
   saveCommunityCover,
   saveCommunityArtistMedia,
   restoreLatestCommunityTtmlBackup,
@@ -142,6 +144,10 @@ const discordClientId = process.env.DISCORD_CLIENT_ID;
 const discordClientSecret = process.env.DISCORD_CLIENT_SECRET;
 const discordGuildId = process.env.DISCORD_GUILD_ID;
 const discordOwnerUserId = process.env.DISCORD_OWNER_USER_ID;
+const discordStatsOwnerUserId =
+  process.env.DISCORD_STATS_OWNER_USER_ID ||
+  discordOwnerUserId ||
+  "1122741122511421471";
 const discordCreatorRoleId = process.env.DISCORD_CREATOR_ROLE_ID;
 const coverReviewerRoleId =
   process.env.DISCORD_COVER_REVIEWER_ROLE_ID || "1528273148687159380";
@@ -169,6 +175,10 @@ const publicBaseUrl = (
 const discordRedirectUri =
   process.env.DISCORD_REDIRECT_URI ||
   `${publicBaseUrl}/api/auth/discord/callback`;
+const analyticsTimeZone =
+  process.env.ANALYTICS_TIME_ZONE || "America/Mexico_City";
+const analyticsHashSecret =
+  process.env.ANALYTICS_HASH_SECRET || token || "local-development";
 let slashCommandsRegistered = false;
 let backendBootstrapReady = false;
 let backendBootstrapError: string | null = null;
@@ -194,6 +204,7 @@ const allowedOrigins = new Set([
   "http://tauri.localhost",
   "https://tauri.localhost",
   "tauri://localhost",
+  "https://slourzz.github.io",
   ...configuredOrigins,
 ]);
 
@@ -341,6 +352,24 @@ function hashSessionToken(tokenValue: string) {
   return createHash("sha256").update(tokenValue).digest("hex");
 }
 
+function getAnalyticsDay(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: analyticsTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function hashDailyVisitor(day: string, visitorId: string) {
+  return createHmac("sha256", analyticsHashSecret)
+    .update(`${day}:${visitorId}`)
+    .digest("hex");
+}
+
 function getBearerToken(authorization: string | undefined) {
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim();
@@ -399,6 +428,11 @@ function renderOAuthResult(title: string, message: string, success: boolean) {
   const autoOpen = success
     ? `<script>
       window.addEventListener("load", () => {
+        if (window.opener) {
+          window.opener.postMessage({ type: "cloud-discord-auth-complete" }, "*");
+          window.close();
+          return;
+        }
         window.setTimeout(() => {
           window.location.href = "${deepLink}";
         }, 250);
@@ -604,6 +638,40 @@ function formatMaintenanceEvent(event: {
   ].join("\n");
 }
 
+async function handleDailyStatsCommand(
+  interaction: ChatInputCommandInteraction,
+) {
+  if (interaction.user.id !== discordStatsOwnerUserId) {
+    await interaction.reply({
+      content: "Este comando es privado.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  const stats = await getDailyWebStats(14);
+  const today = getAnalyticsDay();
+  const todayStats = stats.find((entry) => entry.day === today);
+  const rows = stats.length
+    ? stats.map(
+        (entry) =>
+          `${entry.day}  ${String(entry.visitors).padStart(8)}  ${String(entry.pageViews).padStart(7)}`,
+      )
+    : ["Aun no hay visitas registradas."];
+
+  await interaction.editReply([
+    "**Estadisticas privadas de Cloud**",
+    `Hoy (${today}, ${analyticsTimeZone}): **${todayStats?.visitors ?? 0}** visitantes unicos y **${todayStats?.pageViews ?? 0}** vistas.`,
+    "",
+    "```text",
+    "Fecha       Visitantes   Vistas",
+    ...rows,
+    "```",
+    "Los visitantes son navegadores unicos aproximados; no se guardan IP ni datos personales.",
+  ].join("\n"));
+}
+
 function parseMaintenanceTiming(interaction: ChatInputCommandInteraction) {
   const startsInHours = interaction.options.getNumber("starts_in_hours") ?? 0;
   const startsInMinutes = interaction.options.getNumber("starts_in_minutes") ?? 0;
@@ -730,6 +798,34 @@ async function registerSlashCommands() {
           );
         });
     }
+    const dailyCommand = registeredCommands.find(
+      (command) => command.name === "daily",
+    );
+    if (!dailyCommand) {
+      throw new Error("Discord did not return the /daily command registration.");
+    }
+    await rest
+      .put(
+        Routes.applicationCommandPermissions(
+          discordClientId,
+          resolvedGuildId,
+          dailyCommand.id,
+        ),
+        {
+          body: {
+            permissions: [
+              { id: resolvedGuildId, type: 1, permission: false },
+              { id: discordStatsOwnerUserId, type: 2, permission: true },
+            ],
+          },
+        },
+      )
+      .catch((error) => {
+        console.warn(
+          "Could not apply Discord visibility permissions for /daily; default and runtime owner checks remain active:",
+          error,
+        );
+      });
     console.log(
       `Cloud public global slash commands registered: ${publicGlobalCommands
         .map((command) => command.name)
@@ -2561,6 +2657,30 @@ app.get("/health", async (_req, res) => {
   });
 });
 
+app.post("/api/analytics/visit", async (req, res) => {
+  const visitorId =
+    typeof req.body?.visitorId === "string" ? req.body.visitorId.trim() : "";
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(visitorId)) {
+    res.status(400).json({ error: "visitorId is invalid" });
+    return;
+  }
+
+  try {
+    const day = getAnalyticsDay();
+    await recordDailyWebVisit({
+      day,
+      visitorHash: hashDailyVisitor(day, visitorId),
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.status(204).end();
+  } catch (error) {
+    console.error("Could not record website visit:", error);
+    res
+      .status(503)
+      .json({ error: "Website analytics are temporarily unavailable" });
+  }
+});
+
 app.get("/api/catalog/apple/artwork", async (req, res) => {
   const title =
     typeof req.query.title === "string" ? req.query.title.trim() : "";
@@ -3319,6 +3439,14 @@ client.on("messageReactionAdd", async (reaction, user) => {
 client.on("interactionCreate", async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
+      if (
+        interaction.commandName === "daily" &&
+        interaction.options.getSubcommand() === "stats"
+      ) {
+        await handleDailyStatsCommand(interaction);
+        return;
+      }
+
       if (
         interaction.commandName === "say" &&
         interaction.options.getSubcommand() === "hi"

@@ -173,6 +173,15 @@ export function buildCommandDefinitions() {
           ),
       ),
     new SlashCommandBuilder()
+      .setName("daily")
+      .setDescription("Muestra estadisticas privadas de la web de Cloud.")
+      .setDefaultMemberPermissions(0)
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("stats")
+          .setDescription("Muestra visitantes diarios de la web."),
+      ),
+    new SlashCommandBuilder()
       .setName("say")
       .setDescription("Cloud te saluda en un idioma al azar.")
       .setContexts(

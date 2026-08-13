@@ -68,3 +68,19 @@ test("say hi es publico y funciona en servidores y MD del bot", () => {
     [{ name: "hi", type: 1 }],
   );
 });
+
+test("daily stats queda deshabilitado por defecto para los miembros", () => {
+  const daily = buildCommandDefinitions().find(
+    (command) => command.name === "daily",
+  );
+
+  assert.ok(daily);
+  assert.equal(daily.default_member_permissions, "0");
+  assert.deepEqual(
+    daily.options?.map((option) => ({
+      name: option.name,
+      type: option.type,
+    })),
+    [{ name: "stats", type: 1 }],
+  );
+});

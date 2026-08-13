@@ -5,6 +5,12 @@ export type SubmissionStatus = "pending" | "approved" | "rejected";
 export type MaintenanceType = "lyrics" | "global";
 export type MaintenanceStatus = "scheduled" | "active" | "ended" | "cancelled";
 
+export type DailyWebStats = {
+  day: string;
+  visitors: number;
+  pageViews: number;
+};
+
 export type SongPayload = {
   id: string;
   title: string;
@@ -373,6 +379,7 @@ const memoryCommunityArtistMedia = new Map<
   CommunityArtistMedia & { pngData: Buffer }
 >();
 const memoryApprovedArtistMediaThreads = new Set<string>();
+const memoryDailyWebVisitors = new Map<string, Map<string, number>>();
 const databaseUrl = process.env.DATABASE_URL;
 const useSsl = process.env.DATABASE_SSL === "true";
 
@@ -675,6 +682,22 @@ export async function initializeSubmissionStore() {
       created_at BIGINT NOT NULL,
       expires_at BIGINT NOT NULL
     )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS web_daily_visitors (
+      visit_day DATE NOT NULL,
+      visitor_hash TEXT NOT NULL,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      page_views INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (visit_day, visitor_hash)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS web_daily_visitors_day_idx
+    ON web_daily_visitors (visit_day DESC)
   `);
 
   await pool.query(`
@@ -1646,6 +1669,75 @@ export async function getDiscordSession(tokenHash: string) {
   );
 
   return result.rows[0]?.user_data;
+}
+
+export async function recordDailyWebVisit(input: {
+  day: string;
+  visitorHash: string;
+}) {
+  const visitors = memoryDailyWebVisitors.get(input.day) ?? new Map<string, number>();
+  visitors.set(input.visitorHash, (visitors.get(input.visitorHash) ?? 0) + 1);
+  memoryDailyWebVisitors.set(input.day, visitors);
+
+  if (!pool) return;
+
+  await pool.query(
+    `
+      INSERT INTO web_daily_visitors (
+        visit_day,
+        visitor_hash,
+        first_seen_at,
+        last_seen_at,
+        page_views
+      )
+      VALUES ($1::date, $2, NOW(), NOW(), 1)
+      ON CONFLICT (visit_day, visitor_hash) DO UPDATE SET
+        last_seen_at = NOW(),
+        page_views = web_daily_visitors.page_views + 1
+    `,
+    [input.day, input.visitorHash],
+  );
+}
+
+export async function getDailyWebStats(days = 14): Promise<DailyWebStats[]> {
+  const safeDays = Math.max(1, Math.min(90, Math.trunc(days)));
+
+  if (!pool) {
+    return [...memoryDailyWebVisitors.entries()]
+      .sort(([left], [right]) => right.localeCompare(left))
+      .slice(0, safeDays)
+      .map(([day, visitors]) => ({
+        day,
+        visitors: visitors.size,
+        pageViews: [...visitors.values()].reduce((total, count) => total + count, 0),
+      }));
+  }
+
+  const result = await pool.query<
+    QueryResultRow & {
+      day: string;
+      visitors: string;
+      page_views: string;
+    }
+  >(
+    `
+      SELECT
+        visit_day::text AS day,
+        COUNT(*)::text AS visitors,
+        COALESCE(SUM(page_views), 0)::text AS page_views
+      FROM web_daily_visitors
+      GROUP BY visit_day
+      ORDER BY visit_day DESC
+      LIMIT $1
+    `,
+    [safeDays],
+  );
+
+  return result.rows.map((row) => ({
+    day: row.day,
+    visitors: Number(row.visitors),
+    pageViews: Number(row.page_views),
+  }));
 }
 
 function isExactSongMatch(song: SongPayload, artist: string, title: string) {
