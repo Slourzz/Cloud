@@ -70,6 +70,20 @@ function buildColorInputs(colors) {
 
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
+function softenGifBanding(rgba, width, height, frame) {
+  const matrix = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const pixel = (y * width + x) * 4;
+      const noise = (matrix[((y + frame) & 3) * 4 + ((x + frame) & 3)] - 7.5) * .42;
+      rgba[pixel] = Math.max(0, Math.min(255, rgba[pixel] + noise));
+      rgba[pixel + 1] = Math.max(0, Math.min(255, rgba[pixel + 1] + noise));
+      rgba[pixel + 2] = Math.max(0, Math.min(255, rgba[pixel + 2] + noise));
+    }
+  }
+  return rgba;
+}
+
 function canvasFromImageData(imageData) {
   const canvas = document.createElement("canvas");
   canvas.width = imageData.width;
@@ -123,12 +137,15 @@ async function generateGif() {
         context.drawImage(canvasFromImageData(rawFrames[blendIndex]), 0, 0);
         context.globalAlpha = 1;
       }
+      const softenedBackground = context.getImageData(0, 0, size, size);
+      softenGifBanding(softenedBackground.data, size, size, frame);
+      context.putImageData(softenedBackground, 0, 0);
       const logoWidth = size * .58;
       const logoHeight = logo.naturalHeight / logo.naturalWidth * logoWidth;
       context.drawImage(logo, (size - logoWidth) / 2, (size - logoHeight) / 2, logoWidth, logoHeight);
       const rgba = context.getImageData(0, 0, size, size).data;
-      const palette = quantize(rgba, 128, { format: "rgb444" });
-      gif.writeFrame(applyPalette(rgba, palette, "rgb444"), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0 });
+      const palette = quantize(rgba, 256, { format: "rgb565" });
+      gif.writeFrame(applyPalette(rgba, palette, "rgb565"), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
       if (frame % 4 === 0) {
         status.textContent = `Creando GIF… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
         await nextPaint();
