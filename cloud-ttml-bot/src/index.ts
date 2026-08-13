@@ -81,6 +81,7 @@ import {
   getMaintenanceSnapshot,
   getApprovedSubmission,
   getApprovedSubmissionsBySubmitter,
+  getTtmlPlayCounts,
   getDiscordAuthRequest,
   getDiscordProfile,
   getDiscordSession,
@@ -93,6 +94,7 @@ import {
   isArtistMediaThreadApproved,
   saveSubmission,
   recordDailyWebVisit,
+  recordTtmlPlay,
   saveCommunityCover,
   saveCommunityArtistMedia,
   restoreLatestCommunityTtmlBackup,
@@ -3239,16 +3241,38 @@ app.get("/api/profiles/:discordId/contributions", async (req, res) => {
   }
 
   const submissions = await getApprovedSubmissionsBySubmitter(discordId);
+  const playCounts = await getTtmlPlayCounts(
+    submissions.map((submission) => submission.id),
+  );
   const contributions = submissions.map((submission) => ({
     id: submission.id,
     title: submission.song.title,
     artist: submission.song.artist,
     coverUrl: submission.song.coverUrl,
     createdAt: submission.createdAt,
+    plays: playCounts.get(submission.id) ?? 0,
   }));
 
   res.setHeader("Cache-Control", "public, max-age=60");
   res.json({ count: contributions.length, contributions });
+});
+
+app.post("/api/ttml/:submissionId/play", async (req, res) => {
+  const submissionId = req.params.submissionId;
+  const playId = typeof req.body?.playId === "string" ? req.body.playId : "";
+  if (!/^[a-zA-Z0-9_-]{16,80}$/.test(playId)) {
+    res.status(400).json({ error: "Anonymous play id is invalid" });
+    return;
+  }
+
+  const plays = await recordTtmlPlay(submissionId, playId);
+  if (plays === null) {
+    res.status(404).json({ error: "Approved TTML was not found" });
+    return;
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ recorded: true, plays });
 });
 
 app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {

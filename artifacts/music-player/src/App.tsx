@@ -25,6 +25,7 @@ import AlbumDetail from "@/pages/album-detail";
 import { CloudNotificationsProvider } from "@/hooks/use-cloud-notifications";
 import { DiscordAuthProvider } from "@/hooks/use-discord-auth";
 import { GoogleCastProvider } from "@/hooks/use-google-cast";
+import { TtmlPlayTracker } from "@/components/ttml-play-tracker";
 
 const queryClient = new QueryClient();
 
@@ -99,6 +100,7 @@ function App() {
                 <ThemeColorsProvider>
                   <PlaylistsProvider>
                     <LyricsProvider>
+                      <TtmlPlayTracker />
                       <GoogleCastProvider>
                         <WouterRouter>
                           <SplashManager />

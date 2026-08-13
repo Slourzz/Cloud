@@ -353,6 +353,7 @@ export function createCommunityArtistMediaKey(
 }
 
 const memorySubmissions = new Map<string, TTMLSubmission>();
+const memoryTtmlPlays = new Map<string, Set<string>>();
 const memoryAuthRequests = new Map<
   string,
   {
@@ -693,6 +694,20 @@ export async function initializeSubmissionStore() {
       page_views INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (visit_day, visitor_hash)
     )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ttml_play_events (
+      submission_id TEXT NOT NULL REFERENCES ttml_submissions(id) ON DELETE CASCADE,
+      play_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (submission_id, play_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS ttml_play_events_submission_idx
+    ON ttml_play_events (submission_id)
   `);
 
   await pool.query(`
@@ -1711,6 +1726,64 @@ export async function getApprovedSubmissionsBySubmitter(
   );
 
   return result.rows.map(rowToSubmission);
+}
+
+export async function recordTtmlPlay(submissionId: string, playId: string) {
+  if (!pool) {
+    const submission = memorySubmissions.get(submissionId);
+    if (!submission || submission.status !== "approved") return null;
+    const plays = memoryTtmlPlays.get(submissionId) ?? new Set<string>();
+    plays.add(playId);
+    memoryTtmlPlays.set(submissionId, plays);
+    return plays.size;
+  }
+
+  const inserted = await pool.query(
+    `
+      INSERT INTO ttml_play_events (submission_id, play_id)
+      SELECT id, $2
+      FROM ttml_submissions
+      WHERE id = $1 AND status = 'approved'
+      ON CONFLICT DO NOTHING
+      RETURNING submission_id
+    `,
+    [submissionId, playId],
+  );
+  if (!inserted.rowCount) {
+    const exists = await pool.query(
+      "SELECT 1 FROM ttml_submissions WHERE id = $1 AND status = 'approved'",
+      [submissionId],
+    );
+    if (!exists.rowCount) return null;
+  }
+
+  const count = await pool.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM ttml_play_events WHERE submission_id = $1",
+    [submissionId],
+  );
+  return Number(count.rows[0]?.count ?? 0);
+}
+
+export async function getTtmlPlayCounts(submissionIds: string[]) {
+  if (submissionIds.length === 0) return new Map<string, number>();
+  if (!pool) {
+    return new Map(
+      submissionIds.map((id) => [id, memoryTtmlPlays.get(id)?.size ?? 0]),
+    );
+  }
+
+  const result = await pool.query<{ submission_id: string; count: string }>(
+    `
+      SELECT submission_id, COUNT(*)::text AS count
+      FROM ttml_play_events
+      WHERE submission_id = ANY($1::text[])
+      GROUP BY submission_id
+    `,
+    [submissionIds],
+  );
+  return new Map(
+    result.rows.map((row) => [row.submission_id, Number(row.count)]),
+  );
 }
 
 export async function getDiscordProfile(discordId: string) {

@@ -42,6 +42,7 @@ interface LyricsState {
   isLoading: boolean;
   error: string | null;
   cloudApproved: boolean;
+  cloudSubmissionId?: string;
   credits: LyricsCredits;
 }
 
@@ -246,6 +247,7 @@ async function fetchApprovedCloudTTML(
   title: string,
   duration?: number,
 ): Promise<{
+  submissionId: string;
   ttmlContent: string;
   synchronizer?: LyricsCredits["synchronizer"];
 } | null> {
@@ -262,6 +264,7 @@ async function fetchApprovedCloudTTML(
     if (!response.ok) return null;
 
     const data = (await response.json()) as {
+      id?: unknown;
       ttmlContent?: unknown;
       synchronizer?: {
         id?: unknown;
@@ -269,11 +272,17 @@ async function fetchApprovedCloudTTML(
         avatarUrl?: unknown;
       };
     };
-    if (typeof data.ttmlContent !== "string" || !data.ttmlContent.trim()) {
+    if (
+      typeof data.id !== "string" ||
+      !data.id ||
+      typeof data.ttmlContent !== "string" ||
+      !data.ttmlContent.trim()
+    ) {
       return null;
     }
 
     return {
+      submissionId: data.id,
       ttmlContent: data.ttmlContent,
       synchronizer:
         data.synchronizer && typeof data.synchronizer.name === "string"
@@ -401,6 +410,7 @@ export function LyricsProvider({ children }: { children: ReactNode }) {
           setLyricsForSong(songId, {
             ...existing,
             cloudApproved: true,
+            cloudSubmissionId: cloudLyrics.submissionId,
           });
           return;
         }
@@ -414,6 +424,7 @@ export function LyricsProvider({ children }: { children: ReactNode }) {
             isLoading: false,
             error: null,
             cloudApproved: true,
+            cloudSubmissionId: cloudLyrics.submissionId,
             credits: {
               ...parsed.credits,
               community: true,
