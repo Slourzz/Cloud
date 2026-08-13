@@ -4,9 +4,9 @@ import { GIFEncoder, quantize } from "./assets/vendor/gifenc.esm.js";
 const DEFAULT_COLORS = ["#FFD1DC", "#A2CFFE", "#AAF0D1", "#E3E4FA", "#FFFACD", "#FFDAB9", "#DCD0FF", "#B0E0E6"];
 const OPTIONS = { warpIntensity: 1.85, blurPasses: 10, animationSpeed: 0.82, saturation: 2.15, dithering: 0.012, transitionDuration: 0, tintIntensity: 0.28, scale: 1.08 };
 const PRESETS = {
-  square: { width: 512, height: 512, label: "Cuadrado", logoScale: .58 },
-  profile: { width: 600, height: 240, label: "Perfil", logoScale: .34 },
-  server: { width: 960, height: 540, label: "Servidor", logoScale: .34 }
+  square: { width: 512, height: 512, label: "Cuadrado" },
+  profile: { width: 600, height: 240, label: "Perfil" },
+  server: { width: 960, height: 540, label: "Servidor" }
 };
 const previewCanvas = document.querySelector("#kawarp-preview");
 const colorsRoot = document.querySelector("#kawarp-colors");
@@ -15,14 +15,23 @@ const darknessValue = document.querySelector("#darkness-value");
 const generateButton = document.querySelector("#generate-gif");
 const downloadButton = document.querySelector("#download-custom-gif");
 const status = document.querySelector("#gif-status");
-const logo = document.querySelector(".discord-gif-logo");
 const sizeControl = document.querySelector(".banner-size-control");
 const dimensions = document.querySelector("#selected-dimensions");
+const editorStage = document.querySelector("#editor-stage");
+const imageUpload = document.querySelector("#image-upload");
+const scaleControl = document.querySelector("#image-scale");
+const scaleValue = document.querySelector("#image-scale-value");
+const centerButton = document.querySelector("#center-image");
+const deleteButton = document.querySelector("#delete-image");
+const guideX = document.querySelector(".snap-guide-x");
+const guideY = document.querySelector(".snap-guide-y");
 let preview;
 let updateTimer;
 let generatedGifUrl;
 let generatedGifSize = 0;
 let selectedPreset = "square";
+let selectedLayer;
+const layers = [];
 
 function paletteCanvas(colors, amount, width, height) {
   const canvas = document.createElement("canvas");
@@ -38,6 +47,118 @@ function paletteCanvas(colors, amount, width, height) {
 }
 
 const selectedColors = () => [...colorsRoot.querySelectorAll("input")].map(input => input.value);
+
+function invalidateGif(message = "Cambios aplicados. Crea el GIF para actualizarlo.") {
+  if (generatedGifUrl) URL.revokeObjectURL(generatedGifUrl);
+  generatedGifUrl = undefined;
+  generatedGifSize = 0;
+  downloadButton.disabled = true;
+  status.textContent = message;
+}
+
+function renderLayer(layer) {
+  layer.element.style.left = `${layer.x * 100}%`;
+  layer.element.style.top = `${layer.y * 100}%`;
+  layer.element.style.width = `${layer.width * 100}%`;
+}
+
+function selectLayer(layer) {
+  selectedLayer = layer;
+  layers.forEach(item => item.element.classList.toggle("is-selected", item === layer));
+  const disabled = !layer;
+  scaleControl.disabled = disabled;
+  centerButton.disabled = disabled;
+  deleteButton.disabled = disabled;
+  if (layer) {
+    scaleControl.value = Math.round(layer.width * 100);
+    scaleValue.value = `${scaleControl.value}%`;
+  }
+}
+
+function clampLayer(layer) {
+  const stage = editorStage.getBoundingClientRect();
+  let item = layer.element.getBoundingClientRect();
+  if (!stage.width || !stage.height) return;
+  if (item.width > stage.width || item.height > stage.height) {
+    layer.width *= Math.min(stage.width / item.width, stage.height / item.height) * .98;
+    renderLayer(layer);
+    item = layer.element.getBoundingClientRect();
+    if (layer === selectedLayer) {
+      scaleControl.value = Math.round(layer.width * 100);
+      scaleValue.value = `${scaleControl.value}%`;
+    }
+  }
+  const halfX = Math.min(.5, item.width / stage.width / 2);
+  const halfY = Math.min(.5, item.height / stage.height / 2);
+  layer.x = Math.max(halfX, Math.min(1 - halfX, layer.x));
+  layer.y = Math.max(halfY, Math.min(1 - halfY, layer.y));
+  renderLayer(layer);
+}
+
+function enableDragging(layer) {
+  layer.element.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    selectLayer(layer);
+    layer.element.setPointerCapture(event.pointerId);
+    const stage = editorStage.getBoundingClientRect();
+    const item = layer.element.getBoundingClientRect();
+    const offsetX = event.clientX - (item.left + item.width / 2);
+    const offsetY = event.clientY - (item.top + item.height / 2);
+    const halfX = Math.min(.5, item.width / stage.width / 2);
+    const halfY = Math.min(.5, item.height / stage.height / 2);
+
+    const move = moveEvent => {
+      let x = (moveEvent.clientX - stage.left - offsetX) / stage.width;
+      let y = (moveEvent.clientY - stage.top - offsetY) / stage.height;
+      x = Math.max(halfX, Math.min(1 - halfX, x));
+      y = Math.max(halfY, Math.min(1 - halfY, y));
+      const thresholdX = 12 / stage.width;
+      const thresholdY = 12 / stage.height;
+      let snapX = null, snapY = null;
+      if (Math.abs(x - .5) <= thresholdX) { x = .5; snapX = .5; }
+      else if (Math.abs(x - halfX) <= thresholdX) { x = halfX; snapX = 0; }
+      else if (Math.abs(x - (1 - halfX)) <= thresholdX) { x = 1 - halfX; snapX = 1; }
+      if (Math.abs(y - .5) <= thresholdY) { y = .5; snapY = .5; }
+      else if (Math.abs(y - halfY) <= thresholdY) { y = halfY; snapY = 0; }
+      else if (Math.abs(y - (1 - halfY)) <= thresholdY) { y = 1 - halfY; snapY = 1; }
+      layer.x = x;
+      layer.y = y;
+      renderLayer(layer);
+      guideX.style.left = `${(snapX ?? .5) * 100}%`;
+      guideY.style.top = `${(snapY ?? .5) * 100}%`;
+      guideX.classList.toggle("is-visible", snapX !== null);
+      guideY.classList.toggle("is-visible", snapY !== null);
+    };
+    const end = () => {
+      guideX.classList.remove("is-visible");
+      guideY.classList.remove("is-visible");
+      layer.element.removeEventListener("pointermove", move);
+      layer.element.removeEventListener("pointerup", end);
+      layer.element.removeEventListener("pointercancel", end);
+      invalidateGif("Posición actualizada con ajuste inteligente.");
+    };
+    layer.element.addEventListener("pointermove", move);
+    layer.element.addEventListener("pointerup", end);
+    layer.element.addEventListener("pointercancel", end);
+  });
+}
+
+async function addImage(file) {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+  image.className = "editor-layer";
+  image.alt = file.name;
+  image.draggable = false;
+  const layer = { element: image, image, url, x: .5, y: .5, width: .3 };
+  layers.push(layer);
+  editorStage.append(image);
+  enableDragging(layer);
+  renderLayer(layer);
+  selectLayer(layer);
+  requestAnimationFrame(() => clampLayer(layer));
+}
 
 function updatePreview() {
   const preset = PRESETS[selectedPreset];
@@ -70,6 +191,7 @@ function selectBannerSize(name) {
     button.setAttribute("aria-pressed", String(active));
   });
   updatePreview();
+  setTimeout(() => layers.forEach(clampLayer), 680);
   status.textContent = `Formato ${preset.label}: ${preset.width} × ${preset.height} px.`;
 }
 
@@ -163,7 +285,7 @@ async function generateGif() {
   try {
     status.textContent = "Preparando Kawarp real…";
     await nextPaint();
-    const { width, height, logoScale } = PRESETS[selectedPreset];
+    const { width, height } = PRESETS[selectedPreset];
     const totalFrames = 80, overlap = 16, fps = 16;
     const renderCanvas = document.createElement("canvas");
     renderCanvas.width = width;
@@ -171,7 +293,6 @@ async function generateGif() {
     const kawarp = new Kawarp(renderCanvas, OPTIONS);
     kawarp.loadImageElement(paletteCanvas(selectedColors(), Number(darkness.value), width, height));
     kawarp.isTransitioning = false;
-    if (!logo.complete || !logo.naturalWidth) await logo.decode();
     const capture = document.createElement("canvas");
     capture.width = width;
     capture.height = height;
@@ -206,9 +327,11 @@ async function generateGif() {
         context.drawImage(canvasFromImageData(rawFrames[blendIndex]), 0, 0);
         context.globalAlpha = 1;
       }
-      const logoWidth = width * logoScale;
-      const logoHeight = logo.naturalHeight / logo.naturalWidth * logoWidth;
-      context.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
+      for (const layer of layers) {
+        const layerWidth = width * layer.width;
+        const layerHeight = layer.image.naturalHeight / layer.image.naturalWidth * layerWidth;
+        context.drawImage(layer.image, width * layer.x - layerWidth / 2, height * layer.y - layerHeight / 2, layerWidth, layerHeight);
+      }
       const rgba = context.getImageData(0, 0, width, height).data;
       const palette = quantize(rgba, 256, { format: "rgb565" });
       gif.writeFrame(applyHighQualityPalette(rgba, palette, width, height), width, height, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
@@ -260,4 +383,43 @@ downloadButton.addEventListener("click", () => {
   anchor.download = `cloud-kawarp-banner-${selectedPreset}.gif`;
   anchor.click();
   status.textContent = `GIF descargado (${(generatedGifSize / 1024 / 1024).toFixed(1)} MB).`;
+});
+document.querySelector("#upload-images").addEventListener("click", () => imageUpload.click());
+imageUpload.addEventListener("change", async () => {
+  const files = [...imageUpload.files];
+  for (const file of files) await addImage(file);
+  imageUpload.value = "";
+  invalidateGif(`${files.length} imagen${files.length === 1 ? " añadida" : "es añadidas"}. Arrástrala y usa las guías para alinearla.`);
+});
+scaleControl.addEventListener("input", () => {
+  if (!selectedLayer) return;
+  selectedLayer.width = Number(scaleControl.value) / 100;
+  scaleValue.value = `${scaleControl.value}%`;
+  renderLayer(selectedLayer);
+  clampLayer(selectedLayer);
+  invalidateGif();
+});
+centerButton.addEventListener("click", () => {
+  if (!selectedLayer) return;
+  selectedLayer.x = selectedLayer.y = .5;
+  renderLayer(selectedLayer);
+  guideX.classList.add("is-visible");
+  guideY.classList.add("is-visible");
+  setTimeout(() => {
+    guideX.classList.remove("is-visible");
+    guideY.classList.remove("is-visible");
+  }, 500);
+  invalidateGif("Imagen centrada automáticamente.");
+});
+deleteButton.addEventListener("click", () => {
+  if (!selectedLayer) return;
+  const index = layers.indexOf(selectedLayer);
+  URL.revokeObjectURL(selectedLayer.url);
+  selectedLayer.element.remove();
+  layers.splice(index, 1);
+  selectLayer(layers.at(-1));
+  invalidateGif("Imagen eliminada.");
+});
+editorStage.addEventListener("pointerdown", event => {
+  if (event.target === editorStage) selectLayer(undefined);
 });

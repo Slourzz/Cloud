@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#181621">
-  <meta name="description" content="GIF animado de Cloud con fondo fluido Kawarp para Discord.">
+  <meta name="description" content="Editor de GIF animado con fondo fluido Kawarp para Discord.">
   <title>GIF para Discord — Cloud</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,18 +18,21 @@
       <header class="tools-heading reveal">
         <span class="breadcrumb">Cloud / Herramientas / Discord</span>
         <h1>GIF para Discord</h1>
-        <p>Logo oficial de Cloud sobre un fondo fluido de bucle continuo.</p>
+        <p>Crea composiciones animadas sobre Kawarp para Discord.</p>
       </header>
 
       <section class="discord-gif-panel reveal" aria-labelledby="discord-gif-title">
         <div class="discord-gif-preview" data-preset="square">
           <canvas id="kawarp-preview" width="512" height="512" aria-label="Vista previa animada de Kawarp"></canvas>
-          <img class="discord-gif-logo" src="./assets/cloud-splash-logo.png" alt="Logo de Cloud">
+          <div id="editor-stage" class="editor-stage" aria-label="Área de edición">
+            <span class="snap-guide snap-guide-x" aria-hidden="true"></span>
+            <span class="snap-guide snap-guide-y" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="discord-gif-copy">
           <span class="section-label">Recurso del servidor</span>
           <h2 id="discord-gif-title">Cloud × Kawarp</h2>
-          <p>Usa el Kawarp real de Cloud para escritorio. Elige ocho colores, ajusta cuánto quieres oscurecerlos y crea un GIF en bucle con el logo totalmente fijo.</p>
+          <p>Usa el Kawarp real de Cloud para escritorio. Elige ocho colores y coloca tus propias imágenes transparentes sobre el fondo animado.</p>
           <div class="banner-size-control" data-active="square" aria-label="Tamaño del banner">
             <span class="banner-size-highlight" aria-hidden="true"></span>
             <button class="banner-size-option is-active" type="button" data-preset="square" aria-pressed="true">
@@ -41,6 +44,19 @@
             <button class="banner-size-option" type="button" data-preset="server" aria-pressed="false">
               <strong>Servidor</strong><small>960 × 540</small>
             </button>
+          </div>
+          <div class="image-editor-controls">
+            <input id="image-upload" type="file" accept="image/png,image/webp" multiple hidden>
+            <div class="editor-actions">
+              <button class="button secondary" id="upload-images" type="button">Añadir imágenes</button>
+              <button class="button secondary" id="center-image" type="button" disabled>Centrar</button>
+              <button class="button secondary editor-delete" id="delete-image" type="button" disabled>Eliminar</button>
+            </div>
+            <label class="image-scale" for="image-scale">
+              <span>Tamaño de la imagen</span><output id="image-scale-value">30%</output>
+              <input id="image-scale" type="range" min="5" max="90" value="30" step="1" disabled>
+            </label>
+            <p>Arrastra cada imagen. Las guías inteligentes corrigen automáticamente el centro y los bordes.</p>
           </div>
           <div class="kawarp-controls">
             <div class="kawarp-control-heading"><span>Paleta de 8 colores</span><button id="reset-palette" type="button">Restablecer</button></div>
@@ -68,6 +84,6 @@
     </main>
   </div>
   <script src="./app.js?v=discord-gif2"></script>
-  <script type="module" src="./discord-gif-tool.js?v=6"></script>
+  <script type="module" src="./discord-gif-tool.js?v=7"></script>
 </body>
 </html>
