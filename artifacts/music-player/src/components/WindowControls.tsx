@@ -11,7 +11,7 @@ function WindowControls() {
     // Intentar cargar la API de Tauri directamente
     import("@tauri-apps/api/window")
       .then((mod) => {
-        const appWindow = mod.appWindow;
+        const appWindow = mod.getCurrentWindow();
         appWindowRef.current = appWindow;
         // Obtener estado inicial
         appWindow.isMaximized().then(setIsMaximized);
@@ -56,65 +56,3 @@ function WindowControls() {
   );
 }
 
-  // Estilo Liquid Glass igual al del resto de la app
-  const pillStyle: React.CSSProperties = {
-    background: "rgba(255, 255, 255, 0.15)",
-    backdropFilter: "blur(20px)",
-    border: "1px solid rgba(255, 255, 255, 0.3)",
-    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
-    borderRadius: "9999px",
-    padding: "2px 4px",
-    display: "flex",
-    alignItems: "center",
-    gap: "2px",
-  };
-
-  const btnStyle: React.CSSProperties = {
-    width: "28px",
-    height: "28px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "50%",
-    background: "transparent",
-    border: "none",
-    color: "rgba(255,255,255,0.8)",
-    cursor: "pointer",
-    transition: "all 150ms ease",
-    padding: 0,
-  };
-
-  return (
-    <div style={pillStyle} data-tauri-drag-region>
-      <button
-        onClick={handleMinimize}
-        style={btnStyle}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        title="Minimizar"
-      >
-        <Minus size={16} strokeWidth={1.5} />
-      </button>
-
-      <button
-        onClick={handleMaximize}
-        style={btnStyle}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        title={isMaximized ? "Restaurar" : "Maximizar"}
-      >
-        {isMaximized ? <Copy size={14} strokeWidth={1.5} /> : <Square size={14} strokeWidth={1.5} />}
-      </button>
-
-      <button
-        onClick={handleClose}
-        style={btnStyle}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.6)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        title="Cerrar"
-      >
-        <X size={16} strokeWidth={1.5} />
-      </button>
-    </div>
-  );
-}
