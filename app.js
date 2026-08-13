@@ -26,7 +26,7 @@ const active = document.body.dataset.page;
 const shell = document.querySelector('#site-shell');
 const navigation = document.createElement('header');
 navigation.className = 'top-navigation';
-const utilityLabels = {guias:'Guías',herramientas:'Herramientas',licencia:'Licencia',repositorio:'Repositorio'};
+const utilityLabels = {guias:'Guías',herramientas:'Herramientas',licencia:'Licencia',repositorio:'Repositorio',perfil:'Perfil'};
 const activeLabel = pages.find(([id]) => id === active)?.[1] || utilityLabels[active] || 'Inicio';
 const activeIndex = pages.findIndex(([id]) => id === active);
 navigation.style.setProperty('--active-index', activeIndex);
@@ -81,8 +81,8 @@ const renderDiscordSession = () => {
         label.textContent = discordSession.user.displayName || discordSession.user.username;
         button.append(label);
       }
-      button.setAttribute('aria-label', `Sesión iniciada como ${discordSession.user.displayName}. Cerrar sesión`);
-      button.title = `Sesión iniciada como ${discordSession.user.displayName}. Clic para cerrar sesión.`;
+      button.setAttribute('aria-label', `Abrir perfil de ${discordSession.user.displayName}`);
+      button.title = `Abrir perfil de ${discordSession.user.displayName}`;
       return;
     }
     button.insertAdjacentHTML('beforeend', discordMark);
@@ -101,7 +101,61 @@ const saveDiscordSession = session => {
   if (session) localStorage.setItem(DISCORD_SESSION_KEY, JSON.stringify(session));
   else localStorage.removeItem(DISCORD_SESSION_KEY);
   renderDiscordSession();
+  renderProfilePage();
 };
+
+async function renderProfilePage() {
+  if (document.body.dataset.page !== 'perfil') return;
+  const loading = document.querySelector('#profile-loading');
+  const gate = document.querySelector('#profile-gate');
+  const content = document.querySelector('#profile-content');
+  const errorPanel = document.querySelector('#profile-error');
+  if (!discordSession?.token) {
+    loading.hidden = true;
+    gate.hidden = false;
+    content.hidden = true;
+    errorPanel.hidden = true;
+    return;
+  }
+  loading.hidden = false;
+  gate.hidden = true;
+  content.hidden = true;
+  errorPanel.hidden = true;
+  try {
+    const requestedId = new URLSearchParams(location.search).get('id');
+    const profileId = requestedId || discordSession.user.id;
+    const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(profileId)}`, {
+      headers: {Authorization: `Bearer ${discordSession.token}`}
+    });
+    if (response.status === 401) {
+      saveDiscordSession(null);
+      return;
+    }
+    if (response.status === 404) {
+      loading.hidden = true;
+      errorPanel.hidden = false;
+      return;
+    }
+    if (!response.ok) throw new Error('No se pudo cargar el perfil');
+    const result = await response.json();
+    const user = result.profile;
+    const avatar = document.querySelector('#profile-avatar');
+    avatar.src = user.avatarUrl || './assets/cloud-app-icon.png';
+    avatar.alt = `Avatar de ${user.displayName || user.username}`;
+    document.querySelector('#profile-display-name').textContent = user.displayName || user.username;
+    document.querySelector('#profile-username').textContent = `@${user.username}`;
+    document.querySelector('#profile-discord-id').textContent = user.id;
+    const profileUrl = new URL('./perfil.html', location.href);
+    profileUrl.searchParams.set('id', user.id);
+    document.querySelector('#profile-share-url').value = profileUrl.href;
+    loading.hidden = true;
+    content.hidden = false;
+  } catch {
+    loading.hidden = true;
+    gate.hidden = false;
+    gate.querySelector('p').textContent = 'No se pudo verificar la sesión. Inténtalo nuevamente.';
+  }
+}
 
 const setDiscordBusy = busy => {
   discordAuthButtons.forEach(button => {
@@ -157,10 +211,33 @@ const startDiscordLogin = async () => {
   }
 };
 
-discordAuthButtons.forEach(button => button.addEventListener('click', startDiscordLogin));
+discordAuthButtons.forEach(button => button.addEventListener('click', () => {
+  if (discordSession) {
+    window.location.href = `./perfil.html?id=${encodeURIComponent(discordSession.user.id)}`;
+    return;
+  }
+  startDiscordLogin();
+}));
 renderDiscordSession();
 
-if (discordSession?.token) {
+if (document.body.dataset.page === 'perfil') {
+  document.querySelector('#profile-logout')?.addEventListener('click', () => saveDiscordSession(null));
+  document.querySelector('#profile-my-profile')?.addEventListener('click', () => {
+    if (discordSession?.user?.id) location.href = `./perfil.html?id=${encodeURIComponent(discordSession.user.id)}`;
+  });
+  document.querySelector('#profile-copy-url')?.addEventListener('click', async event => {
+    const input = document.querySelector('#profile-share-url');
+    try {
+      await navigator.clipboard.writeText(input.value);
+      event.currentTarget.textContent = 'Enlace copiado';
+      setTimeout(() => { event.currentTarget.textContent = 'Copiar enlace'; }, 1600);
+    } catch {
+      input.select();
+      document.execCommand('copy');
+    }
+  });
+  renderProfilePage();
+} else if (discordSession?.token) {
   fetch(`${CLOUD_API_BASE}/api/auth/discord/me`, {
     headers: {Authorization: `Bearer ${discordSession.token}`}
   }).then(response => {

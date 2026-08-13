@@ -36,6 +36,7 @@ import {
   getMaintenanceSnapshot,
   getApprovedSubmission,
   getDiscordAuthRequest,
+  getDiscordProfile,
   getDiscordSession,
   getPendingSubmissions,
   getSubmission,
@@ -1246,6 +1247,29 @@ app.get("/api/auth/discord/me", async (req, res) => {
   }
 
   res.json({ user });
+});
+
+app.get("/api/profiles/:discordId", async (req, res) => {
+  const viewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!viewer) {
+    res.status(401).json({ error: "Discord login is required" });
+    return;
+  }
+
+  const discordId = req.params.discordId;
+  if (!/^\d{15,22}$/.test(discordId)) {
+    res.status(400).json({ error: "Discord profile id is invalid" });
+    return;
+  }
+
+  const profile = await getDiscordProfile(discordId);
+  if (!profile) {
+    res.status(404).json({ error: "Cloud profile was not found" });
+    return;
+  }
+
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({ profile });
 });
 
 app.post("/api/ttml/review", upload.single("ttml"), async (req, res) => {

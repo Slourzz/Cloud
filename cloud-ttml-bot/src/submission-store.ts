@@ -1193,6 +1193,28 @@ export async function getDiscordSession(tokenHash: string) {
   return result.rows[0]?.user_data;
 }
 
+export async function getDiscordProfile(discordId: string) {
+  if (!pool) {
+    for (const session of memoryAuthSessions.values()) {
+      if (session.expiresAt > Date.now() && session.user.id === discordId) return session.user;
+    }
+    return undefined;
+  }
+
+  const result = await pool.query<AuthSessionRow>(
+    `
+      SELECT user_data, expires_at
+      FROM discord_auth_sessions
+      WHERE user_data->>'id' = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [discordId],
+  );
+
+  return result.rows[0]?.user_data;
+}
+
 export function isDatabaseEnabled() {
   return Boolean(pool);
 }

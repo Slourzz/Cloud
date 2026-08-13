@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#232136">
+  <meta name="description" content="Perfil de la comunidad de Cloud.">
+  <title>Perfil — Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=profile1">
+  <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
+</head>
+<body data-page="perfil">
+  <div id="site-shell">
+    <main class="page profile-page">
+      <section id="profile-loading" class="profile-state" aria-live="polite">
+        <span class="profile-loader" aria-hidden="true"></span>
+        <h1>Verificando sesión</h1>
+        <p>Confirmando tu acceso con Discord.</p>
+      </section>
+
+      <section id="profile-gate" class="profile-state" hidden>
+        <span class="profile-lock" aria-hidden="true">✦</span>
+        <h1>Perfiles privados para la comunidad</h1>
+        <p>Inicia sesión con Discord para ver este perfil y compartir el tuyo.</p>
+        <button class="button primary discord-auth-button profile-login" type="button" data-discord-auth>Iniciar sesión con Discord</button>
+      </section>
+
+      <section id="profile-error" class="profile-state" hidden>
+        <span class="profile-lock" aria-hidden="true">?</span>
+        <h1>Perfil no encontrado</h1>
+        <p>Este usuario todavía no ha creado un perfil iniciando sesión en Cloud.</p>
+        <a class="button secondary" href="./index.html">Volver a Cloud</a>
+      </section>
+
+      <article id="profile-content" class="cloud-profile" hidden>
+        <div class="cloud-profile-banner"><span></span><span></span><span></span></div>
+        <div class="cloud-profile-body">
+          <img id="profile-avatar" class="cloud-profile-avatar" src="./assets/cloud-app-icon.png" alt="">
+          <div class="cloud-profile-identity">
+            <span class="profile-verified">Perfil de Discord verificado</span>
+            <h1 id="profile-display-name"></h1>
+            <p id="profile-username"></p>
+          </div>
+          <div class="cloud-profile-actions">
+            <button class="button primary" id="profile-copy-url" type="button">Copiar enlace</button>
+            <button class="button secondary" id="profile-my-profile" type="button">Mi perfil</button>
+          </div>
+          <dl class="profile-details">
+            <div><dt>Discord ID</dt><dd id="profile-discord-id"></dd></div>
+            <div><dt>Acceso</dt><dd>Miembro de Cloud</dd></div>
+          </dl>
+          <label class="profile-share-field" for="profile-share-url">
+            <span>URL compartible</span>
+            <input id="profile-share-url" type="text" readonly>
+          </label>
+          <button id="profile-logout" class="profile-logout" type="button">Cerrar sesión</button>
+        </div>
+      </article>
+    </main>
+  </div>
+  <script src="./app.js?v=profile1"></script>
+</body>
+</html>
