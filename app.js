@@ -117,7 +117,7 @@ async function renderProfilePage() {
     errorPanel.hidden = true;
     return;
   }
-  loading.hidden = false;
+  loading.hidden = true;
   gate.hidden = true;
   content.hidden = true;
   errorPanel.hidden = true;
