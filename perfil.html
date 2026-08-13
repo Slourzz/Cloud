@@ -32,31 +32,40 @@
       </section>
 
       <article id="profile-content" class="cloud-profile" hidden>
-        <div class="cloud-profile-banner"><span></span><span></span><span></span></div>
+        <div class="cloud-profile-banner">
+          <span></span><span></span><span></span>
+          <div class="profile-hero-identity">
+            <img id="profile-avatar" class="cloud-profile-avatar" src="./assets/cloud-app-icon.png" alt="">
+            <div>
+              <h1 id="profile-display-name"></h1>
+              <p id="profile-username"></p>
+              <small><b>0</b> contribuciones · miembro de Cloud</small>
+            </div>
+          </div>
+        </div>
         <div class="cloud-profile-body">
-          <img id="profile-avatar" class="cloud-profile-avatar" src="./assets/cloud-app-icon.png" alt="">
-          <div class="cloud-profile-identity">
-            <span class="profile-verified">Perfil de Discord verificado</span>
-            <h1 id="profile-display-name"></h1>
-            <p id="profile-username"></p>
-          </div>
           <div class="cloud-profile-actions">
-            <button class="button primary" id="profile-copy-url" type="button">Copiar enlace</button>
-            <button class="button secondary" id="profile-my-profile" type="button">Mi perfil</button>
+            <a class="profile-action-button" id="profile-discord-link" target="_blank" rel="noreferrer"><span>◉</span>Ver en Discord</a>
+            <button class="profile-action-button" id="profile-copy-url" type="button"><span>↗</span>Compartir perfil</button>
+            <button class="profile-action-button" id="profile-edit" type="button" hidden><span>✎</span>Editar perfil</button>
           </div>
-          <dl class="profile-details">
-            <div><dt>Discord ID</dt><dd id="profile-discord-id"></dd></div>
-            <div><dt>Acceso</dt><dd>Miembro de Cloud</dd></div>
-          </dl>
-          <label class="profile-share-field" for="profile-share-url">
-            <span>URL compartible</span>
-            <input id="profile-share-url" type="text" readonly>
-          </label>
-          <button id="profile-logout" class="profile-logout" type="button">Cerrar sesión</button>
+          <section class="profile-biography">
+            <span>Biografía</span>
+            <div>
+              <h2>Miembro de Cloud</h2>
+              <p>Perfil conectado y verificado mediante Discord.</p>
+            </div>
+          </section>
+          <footer class="profile-footer-meta">
+            <span>Discord ID: <b id="profile-discord-id"></b></span>
+            <input id="profile-share-url" type="hidden" readonly>
+            <button id="profile-my-profile" type="button">Mi perfil</button>
+            <button id="profile-logout" type="button">Cerrar sesión</button>
+          </footer>
         </div>
       </article>
     </main>
   </div>
-  <script src="./app.js?v=profile2"></script>
+  <script src="./app.js?v=profile3"></script>
 </body>
 </html>

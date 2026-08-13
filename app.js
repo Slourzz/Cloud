@@ -145,6 +145,10 @@ async function renderProfilePage() {
     document.querySelector('#profile-display-name').textContent = user.displayName || user.username;
     document.querySelector('#profile-username').textContent = `@${user.username}`;
     document.querySelector('#profile-discord-id').textContent = user.id;
+    document.querySelector('#profile-discord-link').href = `https://discord.com/users/${encodeURIComponent(user.id)}`;
+    const ownProfile = user.id === discordSession.user.id;
+    document.querySelector('#profile-edit').hidden = !ownProfile;
+    document.querySelector('#profile-copy-url').hidden = ownProfile;
     const profileUrl = new URL('./perfil.html', location.href);
     profileUrl.searchParams.set('id', user.id);
     document.querySelector('#profile-share-url').value = profileUrl.href;
@@ -235,6 +239,9 @@ if (document.body.dataset.page === 'perfil') {
       input.select();
       document.execCommand('copy');
     }
+  });
+  document.querySelector('#profile-edit')?.addEventListener('click', () => {
+    window.alert('La edición de biografía y enlaces llegará en la siguiente actualización.');
   });
   renderProfilePage();
 } else if (discordSession?.token) {
