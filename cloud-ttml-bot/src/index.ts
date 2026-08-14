@@ -3229,6 +3229,33 @@ app.get("/api/profiles/:discordId", async (req, res) => {
   res.json({ profile });
 });
 
+app.get("/api/community/emojis", async (_req, res) => {
+  if (!client.isReady() || !discordGuildId) {
+    res.status(503).json({error: "Discord community emojis are not available yet"});
+    return;
+  }
+
+  try {
+    const guild = client.guilds.cache.get(discordGuildId) ?? await client.guilds.fetch(discordGuildId);
+    const collection = await guild.emojis.fetch();
+    const emojis = collection
+      .filter((emoji) => Boolean(emoji.name) && emoji.available !== false)
+      .map((emoji) => ({
+        id: emoji.id,
+        name: emoji.name!,
+        animated: Boolean(emoji.animated),
+        url: `https://cdn.discordapp.com/emojis/${emoji.id}.${emoji.animated ? "gif" : "webp"}?size=64&quality=lossless`,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.json({emojis});
+  } catch (error) {
+    console.error("Could not load Discord community emojis", error);
+    res.status(503).json({error: "Discord community emojis are not available"});
+  }
+});
+
 app.put("/api/profiles/:discordId", async (req, res) => {
   const discordId = req.params.discordId;
   if (!/^\d{15,22}$/.test(discordId)) {
