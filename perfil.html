@@ -9,8 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=profile13">
+  <link rel="stylesheet" href="./styles.css?v=profile14">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@17.0.3/dist/twemoji.min.js" integrity="sha384-Y5xukbGJwykbHHkTbLJykYLcBPFxrwipTbEh0puxhkz9CZ90raTPGe2Ks4vCxsYU" crossorigin="anonymous"></script>
 </head>
 <body data-page="perfil">
   <div id="site-shell">
@@ -70,17 +71,22 @@
     <form id="profile-editor-form" method="dialog">
       <header><div><span>Personalizar perfil</span><h2 id="profile-editor-title">Editar biografía</h2></div><button id="profile-editor-close" type="button" aria-label="Cerrar">×</button></header>
       <label for="profile-biography-input">Biografía</label>
-      <div id="profile-biography-input" class="profile-biography-input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Cuéntale algo a la comunidad de Cloud…"></div>
-      <section class="profile-emoji-picker" aria-label="Emojis del servidor de Cloud">
-        <div class="profile-emoji-picker-head"><span>Emojis del servidor</span><input id="profile-emoji-search" type="search" placeholder="Buscar emoji" autocomplete="off"></div>
-        <div id="profile-emoji-list" class="profile-emoji-list"><p>Cargando emojis…</p></div>
-      </section>
+      <div class="profile-biography-composer">
+        <div id="profile-biography-input" class="profile-biography-input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Cuéntale algo a la comunidad de Cloud…"></div>
+        <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false">☺</button>
+        <section id="profile-emoji-picker" class="profile-emoji-picker" aria-label="Selector de emojis" hidden>
+          <div class="profile-emoji-picker-head"><strong>Emojis</strong><input id="profile-emoji-search" type="search" placeholder="Buscar" autocomplete="off"></div>
+          <nav id="profile-emoji-categories" class="profile-emoji-categories" aria-label="Categorías de emojis"></nav>
+          <div id="profile-emoji-list" class="profile-emoji-list"></div>
+          <small class="profile-twemoji-credit">Gráficos de <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noreferrer">Twemoji</a> · CC-BY 4.0</small>
+        </section>
+      </div>
       <div class="profile-editor-meta"><span>Texto público en tu perfil</span><output id="profile-biography-count">0 / 300</output></div>
       <footer><button class="button secondary" id="profile-editor-cancel" type="button">Cancelar</button><button class="button primary" id="profile-editor-save" type="submit">Guardar cambios</button></footer>
       <p id="profile-editor-status" role="status" aria-live="polite"></p>
     </form>
   </dialog>
-  <script src="./app.js?v=profile13"></script>
+  <script src="./app.js?v=profile14"></script>
   <script type="module" src="./profile-kawarp.js?v=1"></script>
 </body>
 </html>
