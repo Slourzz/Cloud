@@ -106,17 +106,7 @@ const saveDiscordSession = session => {
   renderProfilePage();
 };
 
-const TWEMOJI_CATEGORIES = [
-  {id: 'frecuentes', icon: '🕘', label: 'Frecuentes', items: [['😀','feliz sonrisa'],['😂','risa lágrimas'],['🥹','emocionado lágrimas'],['😍','enamorado corazones'],['😭','llorar'],['🥺','por favor tierno'],['😎','genial gafas'],['🤔','pensando'],['❤️','corazón rojo'],['🔥','fuego'],['✨','brillos'],['👍','pulgar arriba']]},
-  {id: 'personas', icon: '😀', label: 'Personas', items: [['😄','sonrisa'],['😁','feliz'],['🤣','carcajada'],['😊','sonrojado'],['😇','ángel'],['🙂','sonrisa leve'],['🙃','al revés'],['😉','guiño'],['😌','alivio'],['😘','beso'],['😜','lengua guiño'],['🤭','mano boca'],['🫡','saludo'],['🫶','manos corazón'],['👏','aplausos'],['🙏','gracias']]},
-  {id: 'naturaleza', icon: '🐻', label: 'Naturaleza', items: [['🐶','perro'],['🐱','gato'],['🐭','ratón'],['🐰','conejo'],['🦊','zorro'],['🐻','oso'],['🐼','panda'],['🐸','rana'],['🦋','mariposa'],['🐝','abeja'],['🌸','flor'],['🌹','rosa'],['🌻','girasol'],['🌈','arcoíris'],['⭐','estrella'],['🌙','luna']]},
-  {id: 'comida', icon: '🍕', label: 'Comida', items: [['🍎','manzana'],['🍓','fresa'],['🍒','cerezas'],['🍉','sandía'],['🍇','uvas'],['🍔','hamburguesa'],['🍕','pizza'],['🍟','papas'],['🌮','taco'],['🍣','sushi'],['🍩','dona'],['🍪','galleta'],['🎂','pastel'],['☕','café'],['🧋','té burbujas'],['🥤','bebida']]},
-  {id: 'actividades', icon: '🎮', label: 'Actividades', items: [['⚽','fútbol'],['🏀','baloncesto'],['🎾','tenis'],['🎮','videojuego'],['🎲','dados'],['🎨','arte'],['🎤','micrófono'],['🎧','audífonos'],['🎸','guitarra'],['🎹','piano'],['🎬','cine'],['🎉','fiesta'],['🎊','confeti'],['🏆','trofeo'],['🥇','medalla'],['🎯','diana']]},
-  {id: 'viajes', icon: '🚀', label: 'Viajes', items: [['🚗','auto'],['🚌','autobús'],['🚂','tren'],['✈️','avión'],['🚀','cohete'],['🚲','bicicleta'],['🗺️','mapa'],['🏠','casa'],['🏙️','ciudad'],['🏖️','playa'],['⛰️','montaña'],['🌋','volcán'],['🌅','amanecer'],['🌌','noche estrellas']]},
-  {id: 'objetos', icon: '💡', label: 'Objetos', items: [['⌚','reloj'],['📱','teléfono'],['💻','computadora'],['⌨️','teclado'],['📷','cámara'],['💡','bombilla idea'],['📚','libros'],['✏️','lápiz'],['🎁','regalo'],['🔒','candado'],['🔑','llave'],['💎','diamante'],['🧸','peluche'],['🪄','varita']]},
-  {id: 'simbolos', icon: '💜', label: 'Símbolos', items: [['💖','corazón brillante'],['💜','corazón morado'],['💙','corazón azul'],['💚','corazón verde'],['🖤','corazón negro'],['🤍','corazón blanco'],['💯','cien'],['✅','correcto'],['❌','incorrecto'],['⚠️','advertencia'],['❓','pregunta'],['‼️','exclamación'],['♾️','infinito'],['☁️','nube'],['🎵','música'],['🔞','dieciocho']]},
-  {id: 'banderas', icon: '🏳️', label: 'Banderas', items: [['🇲🇽','méxico'],['🇺🇸','estados unidos'],['🇪🇸','españa'],['🇦🇷','argentina'],['🇨🇴','colombia'],['🇨🇱','chile'],['🇵🇪','perú'],['🇧🇷','brasil'],['🇨🇦','canadá'],['🇯🇵','japón'],['🇰🇷','corea'],['🇫🇷','francia'],['🇩🇪','alemania'],['🏳️‍🌈','orgullo']]}
-];
+const TWEMOJI_CATEGORIES = window.CLOUD_TWEMOJI_CATEGORIES || [];
 
 const renderProfileBiography = (container, biography) => {
   const value = biography || 'Este usuario aún no ha añadido una biografía.';
@@ -546,7 +536,7 @@ if (document.body.dataset.page === 'perfil') {
   const emojiPicker = document.querySelector('#profile-emoji-picker');
   const emojiToggle = document.querySelector('#profile-emoji-toggle');
   const emojiCategories = document.querySelector('#profile-emoji-categories');
-  let activeEmojiCategory = 'frecuentes';
+  let activeEmojiCategory = TWEMOJI_CATEGORIES[0]?.id || 'server';
   let serverEmojis = [];
   let serverEmojiMessage = 'Cargando emojis del servidor…';
   let serverEmojisLoaded = false;
@@ -582,9 +572,11 @@ if (document.body.dataset.page === 'perfil') {
     editorStatus.textContent = '';
     biographyInput.dispatchEvent(new Event('input', {bubbles: true}));
   };
-  const renderEmojiItems = items => {
-    emojiList.replaceChildren();
-    items.forEach(item => {
+  let visibleEmojiItems = [];
+  let emojiRenderCursor = 0;
+  const appendEmojiBatch = () => {
+    const fragment = document.createDocumentFragment();
+    visibleEmojiItems.slice(emojiRenderCursor, emojiRenderCursor + 120).forEach(item => {
       const button = document.createElement('button');
       button.type = 'button';
       button.title = item.kind === 'server' ? `:${item.name}:` : item.name;
@@ -603,10 +595,22 @@ if (document.body.dataset.page === 'perfil') {
       }
       button.addEventListener('mousedown', event => event.preventDefault());
       button.addEventListener('click', () => insertEmoji(item));
-      emojiList.append(button);
+      fragment.append(button);
     });
+    emojiRenderCursor = Math.min(emojiRenderCursor + 120, visibleEmojiItems.length);
+    emojiList.append(fragment);
+  };
+  const renderEmojiItems = items => {
+    visibleEmojiItems = items;
+    emojiRenderCursor = 0;
+    emojiList.replaceChildren();
+    appendEmojiBatch();
     if (!items.length) emojiList.innerHTML = '<p>No se encontraron emojis.</p>';
   };
+  emojiList.addEventListener('scroll', () => {
+    if (emojiRenderCursor >= visibleEmojiItems.length) return;
+    if (emojiList.scrollTop + emojiList.clientHeight >= emojiList.scrollHeight - 120) appendEmojiBatch();
+  }, {passive: true});
   const renderEmojiCategory = categoryId => {
     activeEmojiCategory = categoryId;
     emojiCategories.querySelectorAll('button').forEach(button => {
