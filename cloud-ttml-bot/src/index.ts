@@ -3323,7 +3323,9 @@ app.get("/api/profiles/:discordId/contributions", async (req, res) => {
     coverUrl: submission.song.coverUrl,
     createdAt: submission.createdAt,
     plays: playCounts.get(submission.id) ?? 0,
-    createdByProfile: submission.submitter?.id === discordId,
+    createdByProfile:
+      submission.submitter?.id === discordId ||
+      (!submission.submitter?.id && submission.moderator?.id === discordId),
     uploadedByProfile: submission.moderator?.id === discordId,
   }));
 
