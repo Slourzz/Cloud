@@ -474,6 +474,10 @@ const updateProfileScrollScene = () => {
   const track = document.querySelector('.profile-scroll-track');
   const stage = document.querySelector('.profile-sticky-stage');
   if (!track || !stage || window.matchMedia('(max-width: 820px)').matches) return;
+  if (document.body.classList.contains('profile-edit-mode')) {
+    stage.classList.remove('is-contributions-view');
+    return;
+  }
   const rect = track.getBoundingClientRect();
   const available = Math.max(1, track.offsetHeight - stage.offsetHeight);
   const progress = Math.min(1, Math.max(0, -rect.top / available));
@@ -860,6 +864,8 @@ if (document.body.dataset.page === 'perfil') {
     originalBiography = renderedProfile?.biography || '';
     draftBiography = originalBiography;
     editMode = true;
+    document.querySelector('.profile-sticky-stage')?.classList.remove('is-contributions-view');
+    window.scrollTo({top: 0, left: 0, behavior: 'auto'});
     document.body.classList.add('profile-edit-mode');
     editControls.hidden = false;
     document.querySelector('#profile-edit').hidden = true;
