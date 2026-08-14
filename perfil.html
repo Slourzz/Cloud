@@ -9,7 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=profile20">
+  <link rel="stylesheet" href="./styles.css?v=profile21">
+  <style>body.profile-edit-mode .profile-bio-card>#profile-bio-title::after{display:none!important;content:none!important}.profile-biography-edit-area{position:relative!important}.profile-inline-editor-tools{position:static!important}.profile-inline-editor-tools>#profile-emoji-toggle{top:11px!important;right:11px!important;bottom:auto!important}</style>
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
   <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@17.0.3/dist/twemoji.min.js" integrity="sha384-Y5xukbGJwykbHHkTbLJykYLcBPFxrwipTbEh0puxhkz9CZ90raTPGe2Ks4vCxsYU" crossorigin="anonymous"></script>
   <script src="./twemoji-catalog.js?v=17.0"></script>
@@ -49,7 +50,7 @@
               <div class="profile-biography-edit-area">
                 <p id="profile-biography" tabindex="-1"></p>
                 <div id="profile-inline-editor-tools" class="profile-inline-editor-tools" hidden>
-                  <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false">☺</button>
+                  <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false" style="top:11px;right:11px;bottom:auto">☺</button>
                   <output id="profile-biography-count">0 / 300</output>
                   <p id="profile-editor-status" role="status" aria-live="polite"></p>
                   <section id="profile-emoji-picker" class="profile-emoji-picker" aria-label="Selector de emojis" hidden>
