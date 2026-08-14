@@ -434,6 +434,9 @@ function applyHighQualityPalette(rgba, palette, width, height) {
   const nearestCache = new Int16Array(65536);
   nearestCache.fill(-1);
   const clamp = value => Math.max(0, Math.min(255, value));
+  // GIF is limited to 256 colors. Partial diffusion preserves smooth Kawarp
+  // gradients without turning fine artwork and text into visible grain.
+  const diffusion = .58;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -449,7 +452,7 @@ function applyHighQualityPalette(rgba, palette, width, height) {
         for (let color = 0; color < palette.length; color += 1) {
           const candidate = palette[color];
           const dr = red - candidate[0], dg = green - candidate[1], db = blue - candidate[2];
-          const candidateDistance = dr * dr + dg * dg + db * db;
+          const candidateDistance = dr * dr * 2 + dg * dg * 4 + db * db * 3;
           if (candidateDistance < distance) {
             distance = candidateDistance;
             nearest = color;
@@ -463,10 +466,10 @@ function applyHighQualityPalette(rgba, palette, width, height) {
       const chosen = palette[nearest];
       const errors = [red - chosen[0], green - chosen[1], blue - chosen[2]];
       for (let channel = 0; channel < 3; channel += 1) {
-        current[error + 3 + channel] += errors[channel] * 7 / 16;
-        next[error - 3 + channel] += errors[channel] * 3 / 16;
-        next[error + channel] += errors[channel] * 5 / 16;
-        next[error + 3 + channel] += errors[channel] / 16;
+        current[error + 3 + channel] += errors[channel] * 7 / 16 * diffusion;
+        next[error - 3 + channel] += errors[channel] * 3 / 16 * diffusion;
+        next[error + channel] += errors[channel] * 5 / 16 * diffusion;
+        next[error + 3 + channel] += errors[channel] / 16 * diffusion;
       }
     }
     current = next;
@@ -501,10 +504,14 @@ async function generateGif() {
     capture.width = width;
     capture.height = height;
     const captureContext = capture.getContext("2d", { willReadFrequently: true });
+    captureContext.imageSmoothingEnabled = true;
+    captureContext.imageSmoothingQuality = "high";
     const composite = document.createElement("canvas");
     composite.width = width;
     composite.height = height;
     const context = composite.getContext("2d", { willReadFrequently: true });
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     const rawFrames = [];
 
     for (let frame = 0; frame < totalFrames; frame += 1) {
@@ -541,10 +548,10 @@ async function generateGif() {
         context.restore();
       }
       const rgba = context.getImageData(0, 0, width, height).data;
-      const palette = quantize(rgba, 256, { format: "rgb565" });
+      const palette = quantize(rgba, 256, { format: "rgb565", useSqrt: true });
       gif.writeFrame(applyHighQualityPalette(rgba, palette, width, height), width, height, { palette, delay: Math.round(1000 / fps), repeat: 0, colorDepth: 8 });
       if (frame % 4 === 0) {
-        status.textContent = `Aplicando color de alta calidad… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
+        status.textContent = `Aplicando calidad máxima… ${45 + Math.round((frame + 1) / outputFrames * 55)}%`;
         await nextPaint();
       }
     }
