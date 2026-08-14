@@ -281,8 +281,7 @@ const renderProfileContributions = async profileId => {
 
     const recentContributions = contributions
       .slice()
-      .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))
-      .slice(0, 4);
+      .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
     if (recentEmpty) recentEmpty.hidden = recentContributions.length > 0;
     recentContributions.forEach(contribution => {
       const item = document.createElement('article');
@@ -429,6 +428,12 @@ if (document.body.dataset.page === 'perfil') {
     const stage = document.querySelector('.profile-sticky-stage');
     const list = document.querySelector('#profile-contribution-list');
     if (!stage?.classList.contains('is-contributions-view') || !list || window.matchMedia('(max-width: 820px)').matches) return;
+    event.preventDefault();
+    list.scrollTop += event.deltaY;
+  }, {passive: false});
+  document.querySelector('.profile-recent-card')?.addEventListener('wheel', event => {
+    const list = document.querySelector('#profile-recent-list');
+    if (!list || window.matchMedia('(max-width: 820px)').matches) return;
     event.preventDefault();
     list.scrollTop += event.deltaY;
   }, {passive: false});
