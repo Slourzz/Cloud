@@ -3244,7 +3244,7 @@ app.get("/api/community/emojis", async (_req, res) => {
         id: emoji.id,
         name: emoji.name!,
         animated: Boolean(emoji.animated),
-        url: `https://cdn.discordapp.com/emojis/${emoji.id}.${emoji.animated ? "gif" : "webp"}?size=64&quality=lossless`,
+        url: `https://cdn.discordapp.com/emojis/${emoji.id}.webp?size=64&quality=lossless`,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
 
