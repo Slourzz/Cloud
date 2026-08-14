@@ -54,6 +54,7 @@ document.body.append(mobileNavigation);
 
 const discordAuthButtons = [...document.querySelectorAll('[data-discord-auth]')];
 let discordSession = null;
+let renderedProfile = null;
 
 try {
   const savedSession = JSON.parse(localStorage.getItem(DISCORD_SESSION_KEY) || 'null');
@@ -138,11 +139,13 @@ async function renderProfilePage() {
     if (!response.ok) throw new Error('No se pudo cargar el perfil');
     const result = await response.json();
     const user = result.profile;
+    renderedProfile = user;
     const avatar = document.querySelector('#profile-avatar');
     avatar.src = user.avatarUrl || './assets/cloud-app-icon.png';
     avatar.alt = `Avatar de ${user.displayName || user.username}`;
     document.querySelector('#profile-display-name').textContent = user.displayName || user.username;
     document.querySelector('#profile-username').textContent = `@${user.username}`;
+    document.querySelector('#profile-biography').textContent = user.biography || 'Este usuario aún no ha añadido una biografía.';
     document.querySelector('#profile-discord-link').href = `https://discord.com/users/${encodeURIComponent(user.id)}`;
     const ownProfile = user.id === discordSession?.user?.id;
     document.querySelector('#profile-edit').hidden = !ownProfile;
@@ -253,8 +256,11 @@ const createContributionArtwork = contribution => {
 const renderProfileContributions = async profileId => {
   const list = document.querySelector('#profile-contribution-list');
   const empty = document.querySelector('#profile-contribution-empty');
+  const recentList = document.querySelector('#profile-recent-list');
+  const recentEmpty = document.querySelector('#profile-recent-empty');
   if (!list || !empty) return;
   list.replaceChildren();
+  recentList?.replaceChildren();
 
   try {
     const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(profileId)}/contributions`);
@@ -271,6 +277,28 @@ const renderProfileContributions = async profileId => {
     document.querySelector('#profile-contribution-total').textContent = String(contributions.length);
     document.querySelector('#profile-contribution-badge').textContent = String(contributions.length);
     empty.hidden = contributions.length > 0;
+
+    const recentContributions = contributions
+      .slice()
+      .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))
+      .slice(0, 4);
+    if (recentEmpty) recentEmpty.hidden = recentContributions.length > 0;
+    recentContributions.forEach(contribution => {
+      const item = document.createElement('article');
+      item.className = 'profile-recent-item';
+      const artwork = createContributionArtwork(contribution);
+      const copy = document.createElement('div');
+      const title = document.createElement('strong');
+      title.textContent = contribution.title || 'Contribución de Cloud';
+      const artist = document.createElement('span');
+      artist.textContent = contribution.artist || 'Artista desconocido';
+      copy.append(title, artist);
+      const plays = Number(contribution.plays) || 0;
+      const counter = document.createElement('small');
+      counter.textContent = `${plays.toLocaleString('es-MX')} ${plays === 1 ? 'reproducción' : 'reproducciones'}`;
+      item.append(artwork, copy, counter);
+      recentList?.append(item);
+    });
 
     contributions.forEach((contribution, index) => {
       const item = document.createElement('article');
@@ -300,6 +328,7 @@ const renderProfileContributions = async profileId => {
     document.querySelector('#profile-contribution-total').textContent = '0';
     document.querySelector('#profile-contribution-badge').textContent = '0';
     empty.hidden = false;
+    if (recentEmpty) recentEmpty.hidden = false;
   }
 };
 
@@ -401,8 +430,49 @@ if (document.body.dataset.page === 'perfil') {
       item.hidden = Boolean(query) && !item.dataset.search.includes(query);
     });
   });
+  const profileEditor = document.querySelector('#profile-editor');
+  const biographyInput = document.querySelector('#profile-biography-input');
+  const biographyCount = document.querySelector('#profile-biography-count');
+  const editorStatus = document.querySelector('#profile-editor-status');
+  const closeProfileEditor = () => profileEditor?.close();
+  const updateBiographyCount = () => {
+    biographyCount.textContent = `${biographyInput.value.length} / 300`;
+  };
   document.querySelector('#profile-edit')?.addEventListener('click', () => {
-    window.alert('La edición de biografía y enlaces llegará en la siguiente actualización.');
+    biographyInput.value = renderedProfile?.biography || '';
+    editorStatus.textContent = '';
+    updateBiographyCount();
+    profileEditor.showModal();
+    biographyInput.focus();
+  });
+  biographyInput?.addEventListener('input', updateBiographyCount);
+  document.querySelector('#profile-editor-close')?.addEventListener('click', closeProfileEditor);
+  document.querySelector('#profile-editor-cancel')?.addEventListener('click', closeProfileEditor);
+  document.querySelector('#profile-editor-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!renderedProfile?.id || renderedProfile.id !== discordSession?.user?.id) return;
+    const saveButton = document.querySelector('#profile-editor-save');
+    saveButton.disabled = true;
+    editorStatus.textContent = 'Guardando…';
+    try {
+      const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(renderedProfile.id)}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${discordSession.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({biography: biographyInput.value})
+      });
+      if (!response.ok) throw new Error('No se pudo guardar la biografía');
+      const result = await response.json();
+      renderedProfile = result.profile;
+      document.querySelector('#profile-biography').textContent = renderedProfile.biography || 'Este usuario aún no ha añadido una biografía.';
+      closeProfileEditor();
+    } catch (error) {
+      editorStatus.textContent = error instanceof Error ? error.message : 'No se pudo guardar la biografía.';
+    } finally {
+      saveButton.disabled = false;
+    }
   });
   renderProfilePage();
 } else if (discordSession?.token) {

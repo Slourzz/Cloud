@@ -41,6 +41,15 @@
               <a class="profile-action-button" id="profile-discord-link" target="_blank" rel="noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 5.34A17.3 17.3 0 0 0 15.44 4l-.5 1.03a15.8 15.8 0 0 0-5.86 0L8.56 4A17.3 17.3 0 0 0 4.5 5.34C1.93 9.18 1.23 12.93 1.58 16.62a16.4 16.4 0 0 0 4.98 2.51l1.22-1.66a10.7 10.7 0 0 1-1.91-.92l.47-.36a12.45 12.45 0 0 0 11.32 0l.48.36c-.61.36-1.25.67-1.92.92l1.22 1.66a16.4 16.4 0 0 0 4.98-2.51c.41-4.28-.7-8-2.92-11.28ZM8.82 14.37c-1.09 0-1.98-1-1.98-2.22s.87-2.23 1.98-2.23 2 1 1.98 2.23c0 1.22-.88 2.22-1.98 2.22Zm6.36 0c-1.1 0-1.98-1-1.98-2.22s.87-2.23 1.98-2.23 2 1 1.98 2.23c0 1.22-.87 2.22-1.98 2.22Z"/></svg><span>Discord</span></a>
               <button class="profile-action-button" id="profile-edit" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4 4M4 20l4.5-1 10-10a2.83 2.83 0 0 0-4-4l-10 10L4 20Z"/></svg><span>Editar</span></button>
             </div>
+            <section class="profile-bio-card" aria-labelledby="profile-bio-title">
+              <span id="profile-bio-title">Biografía</span>
+              <p id="profile-biography"></p>
+            </section>
+            <section class="profile-recent-card" aria-labelledby="profile-recent-title">
+              <header><div><span>Actividad reciente</span><h2 id="profile-recent-title">Últimas contribuciones</h2></div><small>TTML</small></header>
+              <div id="profile-recent-list" class="profile-recent-list"></div>
+              <p id="profile-recent-empty" class="profile-recent-empty" hidden>Aún no hay contribuciones.</p>
+            </section>
             <div class="profile-contribution-count"><span><strong id="profile-play-total">0</strong><small>Reproducciones</small></span><span><strong id="profile-contribution-total">0</strong><small>Contribuciones</small></span></div>
             <footer class="profile-footer-meta"><button id="profile-my-profile" type="button">Mi perfil</button><button id="profile-logout" type="button">Cerrar sesión</button></footer>
           </section>
@@ -57,6 +66,16 @@
       </article>
     </main>
   </div>
-  <script src="./app.js?v=profile8"></script>
+  <dialog id="profile-editor" class="profile-editor-dialog" aria-labelledby="profile-editor-title">
+    <form id="profile-editor-form" method="dialog">
+      <header><div><span>Personalizar perfil</span><h2 id="profile-editor-title">Editar biografía</h2></div><button id="profile-editor-close" type="button" aria-label="Cerrar">×</button></header>
+      <label for="profile-biography-input">Biografía</label>
+      <textarea id="profile-biography-input" maxlength="300" rows="6" placeholder="Cuéntale algo a la comunidad de Cloud…"></textarea>
+      <div class="profile-editor-meta"><span>Texto público en tu perfil</span><output id="profile-biography-count">0 / 300</output></div>
+      <footer><button class="button secondary" id="profile-editor-cancel" type="button">Cancelar</button><button class="button primary" id="profile-editor-save" type="submit">Guardar cambios</button></footer>
+      <p id="profile-editor-status" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+  <script src="./app.js?v=profile9"></script>
 </body>
 </html>
