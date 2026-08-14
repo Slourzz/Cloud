@@ -239,6 +239,10 @@ const getBiographyEditorValue = editor => {
   };
   return Array.from(editor.childNodes, serialize).join('').replace(/\n+$/, '');
 };
+const getBiographyCharacterCount = biography => {
+  const visibleBiography = biography.replace(/<(?:a?):[A-Za-z0-9_]{1,32}:\d{15,22}>/g, '\uFFFC');
+  return Array.from(new Intl.Segmenter('es', {granularity: 'grapheme'}).segment(visibleBiography)).length;
+};
 
 async function renderProfilePage() {
   if (document.body.dataset.page !== 'perfil') return;
@@ -614,7 +618,7 @@ if (document.body.dataset.page === 'perfil') {
     const rawValue = item.kind === 'server'
       ? `<${item.animated ? 'a' : ''}:${item.name}:${item.id}>`
       : item.unicode;
-    if (getBiographyEditorValue(biographyInput).length + rawValue.length > 300) {
+    if (getBiographyCharacterCount(getBiographyEditorValue(biographyInput) + rawValue) > 100) {
       editorStatus.textContent = 'No hay espacio suficiente para insertar este emoji.';
       return;
     }
@@ -765,7 +769,7 @@ if (document.body.dataset.page === 'perfil') {
     emojiToggle.setAttribute('aria-expanded', 'false');
   };
   const updateBiographyCount = () => {
-    biographyCount.textContent = `${getBiographyEditorValue(biographyInput).length} / 300`;
+    biographyCount.textContent = `${getBiographyCharacterCount(getBiographyEditorValue(biographyInput))} / 100`;
   };
   const deactivateBiographyEditor = () => {
     if (!biographyEditing) return;
@@ -867,7 +871,7 @@ if (document.body.dataset.page === 'perfil') {
   });
   biographyInput?.addEventListener('input', () => {
     const nextBiography = getBiographyEditorValue(biographyInput);
-    if (nextBiography.length > 300) {
+    if (getBiographyCharacterCount(nextBiography) > 100) {
       setBiographyEditorValue(biographyInput, lastValidBiography);
       const range = document.createRange();
       range.selectNodeContents(biographyInput);
@@ -875,7 +879,7 @@ if (document.body.dataset.page === 'perfil') {
       const selection = window.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(range);
-      editorStatus.textContent = 'La biografía admite hasta 300 caracteres.';
+      editorStatus.textContent = 'La biografía admite hasta 100 caracteres.';
     } else {
       lastValidBiography = nextBiography;
       draftBiography = nextBiography;
