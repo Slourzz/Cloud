@@ -3285,8 +3285,12 @@ app.put("/api/profiles/:discordId", async (req, res) => {
   }
 
   const biography = req.body.biography.replace(/\r\n?/g, "\n").trim();
-  if (biography.length > 300) {
-    res.status(400).json({ error: "Biography cannot exceed 300 characters" });
+  const visibleBiography = biography.replace(/<(?:a?):[A-Za-z0-9_]{1,32}:\d{15,22}>/g, "\uFFFC");
+  const biographyLength = Array.from(
+    new Intl.Segmenter("es", {granularity: "grapheme"}).segment(visibleBiography),
+  ).length;
+  if (biographyLength > 100) {
+    res.status(400).json({ error: "Biography cannot exceed 100 characters" });
     return;
   }
 
