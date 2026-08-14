@@ -485,8 +485,10 @@ const filterProfileContributions = () => {
   const query = document.querySelector('#profile-contribution-search')?.value.trim().toLocaleLowerCase('es') || '';
   const items = [...document.querySelectorAll('.profile-contribution-item')];
   let visibleIndex = 0;
+  let tabTotal = 0;
   items.forEach(item => {
     const belongsToTab = item.dataset[activeProfileContributionTab] === 'true';
+    if (belongsToTab) tabTotal += 1;
     const matchesSearch = !query || item.dataset.search.includes(query);
     item.hidden = !belongsToTab || !matchesSearch;
     if (!item.hidden) {
@@ -497,6 +499,8 @@ const filterProfileContributions = () => {
   document.querySelectorAll('[data-profile-contribution-tab]').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.profileContributionTab === activeProfileContributionTab));
   });
+  document.querySelector('#profile-contribution-badge').textContent = String(tabTotal);
+  document.querySelector('#profile-contribution-badge-label').textContent = activeProfileContributionTab === 'created' ? 'Creados' : 'Subidos';
   const empty = document.querySelector('#profile-contribution-empty');
   if (empty) {
     empty.hidden = visibleIndex > 0;
@@ -530,7 +534,6 @@ const renderProfileContributions = async profileId => {
     const totalPlays = contributions.reduce((total, contribution) => total + (Number(contribution.plays) || 0), 0);
     document.querySelector('#profile-play-total').textContent = totalPlays.toLocaleString('es-MX');
     document.querySelector('#profile-contribution-total').textContent = String(contributions.length);
-    document.querySelector('#profile-contribution-badge').textContent = String(contributions.length);
     const createdCount = contributions.filter(contribution => contribution.createdByProfile).length;
     const uploadedCount = contributions.filter(contribution => contribution.uploadedByProfile).length;
     document.querySelector('#profile-created-count').textContent = String(createdCount);
