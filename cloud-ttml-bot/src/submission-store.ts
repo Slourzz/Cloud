@@ -27,6 +27,7 @@ export type DiscordIdentity = {
   username: string;
   displayName: string;
   avatarUrl?: string;
+  biography?: string;
 };
 
 export type TTMLSubmission = {
@@ -367,6 +368,7 @@ const memoryAuthSessions = new Map<
   string,
   { user: DiscordIdentity; expiresAt: number }
 >();
+const memoryProfileBiographies = new Map<string, string>();
 const memoryMaintenanceEvents = new Map<string, MaintenanceEvent>();
 const memoryMaintenanceAcknowledgements = new Map<string, number>();
 const memoryDeleteBackups = new Map<string, TTMLSubmission[]>();
@@ -682,6 +684,14 @@ export async function initializeSubmissionStore() {
       user_data JSONB NOT NULL,
       created_at BIGINT NOT NULL,
       expires_at BIGINT NOT NULL
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS discord_profile_settings (
+      discord_id TEXT PRIMARY KEY,
+      biography TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
@@ -1789,23 +1799,47 @@ export async function getTtmlPlayCounts(submissionIds: string[]) {
 export async function getDiscordProfile(discordId: string) {
   if (!pool) {
     for (const session of memoryAuthSessions.values()) {
-      if (session.expiresAt > Date.now() && session.user.id === discordId) return session.user;
+      if (session.expiresAt > Date.now() && session.user.id === discordId) {
+        return {...session.user, biography: memoryProfileBiographies.get(discordId) ?? ''};
+      }
     }
     return undefined;
   }
 
   const result = await pool.query<AuthSessionRow>(
     `
-      SELECT user_data, expires_at
-      FROM discord_auth_sessions
-      WHERE user_data->>'id' = $1
-      ORDER BY created_at DESC
+      SELECT s.user_data || jsonb_build_object(
+        'biography', COALESCE(p.biography, '')
+      ) AS user_data, s.expires_at
+      FROM discord_auth_sessions s
+      LEFT JOIN discord_profile_settings p
+        ON p.discord_id = s.user_data->>'id'
+      WHERE s.user_data->>'id' = $1
+      ORDER BY s.created_at DESC
       LIMIT 1
     `,
     [discordId],
   );
 
   return result.rows[0]?.user_data;
+}
+
+export async function updateDiscordBiography(discordId: string, biography: string) {
+  if (!pool) {
+    memoryProfileBiographies.set(discordId, biography);
+    return;
+  }
+
+  await pool.query(
+    `
+      INSERT INTO discord_profile_settings (discord_id, biography, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (discord_id) DO UPDATE SET
+        biography = EXCLUDED.biography,
+        updated_at = NOW()
+    `,
+    [discordId, biography],
+  );
 }
 
 export async function recordDailyWebVisit(input: {

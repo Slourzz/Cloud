@@ -107,6 +107,7 @@ import {
   type MaintenanceType,
   type SongPayload,
   type TTMLSubmission,
+  updateDiscordBiography,
 } from "./submission-store.js";
 import {
   ArtworkReportAlreadyReviewedError,
@@ -3215,9 +3216,10 @@ app.get("/api/profiles/:discordId", async (req, res) => {
   }
 
   const viewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+  const storedProfile = await getDiscordProfile(discordId);
   const profile = discordId === viewer?.id
-    ? viewer
-    : await getDiscordProfile(discordId);
+    ? {...viewer, biography: storedProfile?.biography ?? ""}
+    : storedProfile;
   if (!profile) {
     res.status(404).json({ error: "Cloud profile was not found" });
     return;
@@ -3225,6 +3227,35 @@ app.get("/api/profiles/:discordId", async (req, res) => {
 
   res.setHeader("Cache-Control", "private, no-store");
   res.json({ profile });
+});
+
+app.put("/api/profiles/:discordId", async (req, res) => {
+  const discordId = req.params.discordId;
+  if (!/^\d{15,22}$/.test(discordId)) {
+    res.status(400).json({ error: "Discord profile id is invalid" });
+    return;
+  }
+
+  const viewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+  if (!viewer || viewer.id !== discordId) {
+    res.status(403).json({ error: "Only the profile owner can edit this biography" });
+    return;
+  }
+
+  if (typeof req.body?.biography !== "string") {
+    res.status(400).json({ error: "Biography must be text" });
+    return;
+  }
+
+  const biography = req.body.biography.replace(/\r\n?/g, "\n").trim();
+  if (biography.length > 300) {
+    res.status(400).json({ error: "Biography cannot exceed 300 characters" });
+    return;
+  }
+
+  await updateDiscordBiography(discordId, biography);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({profile: {...viewer, biography}});
 });
 
 app.get("/api/profiles/:discordId/contributions", async (req, res) => {
