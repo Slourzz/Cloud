@@ -480,6 +480,34 @@ const createContributionArtwork = contribution => {
   return image;
 };
 
+let activeProfileContributionTab = 'created';
+const filterProfileContributions = () => {
+  const query = document.querySelector('#profile-contribution-search')?.value.trim().toLocaleLowerCase('es') || '';
+  const items = [...document.querySelectorAll('.profile-contribution-item')];
+  let visibleIndex = 0;
+  items.forEach(item => {
+    const belongsToTab = item.dataset[activeProfileContributionTab] === 'true';
+    const matchesSearch = !query || item.dataset.search.includes(query);
+    item.hidden = !belongsToTab || !matchesSearch;
+    if (!item.hidden) {
+      visibleIndex += 1;
+      item.querySelector('.profile-contribution-order').textContent = String(visibleIndex).padStart(2, '0');
+    }
+  });
+  document.querySelectorAll('[data-profile-contribution-tab]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.profileContributionTab === activeProfileContributionTab));
+  });
+  const empty = document.querySelector('#profile-contribution-empty');
+  if (empty) {
+    empty.hidden = visibleIndex > 0;
+    empty.textContent = query
+      ? 'No hay resultados para esta búsqueda.'
+      : activeProfileContributionTab === 'created'
+        ? 'Aún no hay TTML creados por este usuario.'
+        : 'Aún no hay TTML subidos por este usuario.';
+  }
+};
+
 const renderProfileContributions = async profileId => {
   const list = document.querySelector('#profile-contribution-list');
   const empty = document.querySelector('#profile-contribution-empty');
@@ -503,7 +531,10 @@ const renderProfileContributions = async profileId => {
     document.querySelector('#profile-play-total').textContent = totalPlays.toLocaleString('es-MX');
     document.querySelector('#profile-contribution-total').textContent = String(contributions.length);
     document.querySelector('#profile-contribution-badge').textContent = String(contributions.length);
-    empty.hidden = contributions.length > 0;
+    const createdCount = contributions.filter(contribution => contribution.createdByProfile).length;
+    const uploadedCount = contributions.filter(contribution => contribution.uploadedByProfile).length;
+    document.querySelector('#profile-created-count').textContent = String(createdCount);
+    document.querySelector('#profile-uploaded-count').textContent = String(uploadedCount);
 
     const recentContributions = contributions
       .slice()
@@ -530,6 +561,8 @@ const renderProfileContributions = async profileId => {
       const item = document.createElement('article');
       item.className = 'profile-contribution-item';
       item.dataset.search = `${contribution.title || ''} ${contribution.artist || ''}`.toLocaleLowerCase('es');
+      item.dataset.created = String(Boolean(contribution.createdByProfile));
+      item.dataset.uploaded = String(Boolean(contribution.uploadedByProfile));
       item.style.setProperty('--item-delay', `${Math.min(index * 45, 360)}ms`);
       const artwork = createContributionArtwork(contribution);
       const order = document.createElement('span');
@@ -549,10 +582,13 @@ const renderProfileContributions = async profileId => {
       item.append(order, artwork, copy, type);
       list.append(item);
     });
+    filterProfileContributions();
   } catch {
     document.querySelector('#profile-play-total').textContent = '0';
     document.querySelector('#profile-contribution-total').textContent = '0';
     document.querySelector('#profile-contribution-badge').textContent = '0';
+    document.querySelector('#profile-created-count').textContent = '0';
+    document.querySelector('#profile-uploaded-count').textContent = '0';
     empty.hidden = false;
     if (recentEmpty) recentEmpty.hidden = false;
   }
@@ -667,10 +703,11 @@ if (document.body.dataset.page === 'perfil') {
     event.preventDefault();
     list.scrollTop += event.deltaY;
   }, {passive: false});
-  document.querySelector('#profile-contribution-search')?.addEventListener('input', event => {
-    const query = event.currentTarget.value.trim().toLocaleLowerCase('es');
-    document.querySelectorAll('.profile-contribution-item').forEach(item => {
-      item.hidden = Boolean(query) && !item.dataset.search.includes(query);
+  document.querySelector('#profile-contribution-search')?.addEventListener('input', filterProfileContributions);
+  document.querySelectorAll('[data-profile-contribution-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+      activeProfileContributionTab = button.dataset.profileContributionTab;
+      filterProfileContributions();
     });
   });
   const biographyInput = document.querySelector('#profile-biography');
