@@ -115,7 +115,7 @@ const renderProfileBiography = (container, biography) => {
     fragment.append(document.createTextNode(value.slice(cursor, match.index)));
     const image = document.createElement('img');
     image.className = 'profile-custom-emoji';
-    image.src = `https://cdn.discordapp.com/emojis/${match[3]}.webp?size=64&quality=lossless`;
+    image.src = `https://cdn.discordapp.com/emojis/${match[3]}.${match[1] ? 'gif' : 'webp'}?size=64&quality=lossless`;
     image.alt = `:${match[2]}:`;
     image.title = `:${match[2]}:`;
     image.loading = 'lazy';
@@ -124,6 +124,44 @@ const renderProfileBiography = (container, biography) => {
   }
   fragment.append(document.createTextNode(value.slice(cursor)));
   container.replaceChildren(fragment);
+};
+
+const createBiographyEmoji = ({id, name, animated, url}) => {
+  const image = document.createElement('img');
+  const token = `<${animated ? 'a' : ''}:${name}:${id}>`;
+  image.className = 'profile-editor-emoji';
+  image.src = url || `https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'webp'}?size=64&quality=lossless`;
+  image.alt = `:${name}:`;
+  image.title = `:${name}:`;
+  image.dataset.token = token;
+  image.contentEditable = 'false';
+  image.draggable = false;
+  return image;
+};
+
+const setBiographyEditorValue = (editor, biography = '') => {
+  const pattern = /<(a?):([A-Za-z0-9_]{1,32}):(\d{15,22})>/g;
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  for (const match of biography.matchAll(pattern)) {
+    fragment.append(document.createTextNode(biography.slice(cursor, match.index)));
+    fragment.append(createBiographyEmoji({id: match[3], name: match[2], animated: Boolean(match[1])}));
+    cursor = match.index + match[0].length;
+  }
+  fragment.append(document.createTextNode(biography.slice(cursor)));
+  editor.replaceChildren(fragment);
+};
+
+const getBiographyEditorValue = editor => {
+  const serialize = node => {
+    if (node.nodeType === Node.TEXT_NODE) return (node.nodeValue || '').replaceAll('\u200b', '');
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    if (node.matches('img.profile-editor-emoji')) return node.dataset.token || '';
+    if (node.tagName === 'BR') return '\n';
+    const value = Array.from(node.childNodes, serialize).join('');
+    return node.matches('div, p') ? `${value}\n` : value;
+  };
+  return Array.from(editor.childNodes, serialize).join('').replace(/\n+$/, '');
 };
 
 async function renderProfilePage() {
@@ -473,7 +511,14 @@ if (document.body.dataset.page === 'perfil') {
   const loadServerEmojis = async () => {
     if (serverEmojisLoaded) return;
     try {
-      const response = await fetch(`${CLOUD_API_BASE}/api/community/emojis`);
+      const response = await fetch(`${CLOUD_API_BASE}/api/community/emojis`, {
+        headers: discordSession?.token ? {Authorization: `Bearer ${discordSession.token}`} : {}
+      });
+      if (response.status === 403) {
+        emojiList.innerHTML = '<p>Únete al servidor de Cloud para usar sus emojis.</p>';
+        serverEmojisLoaded = true;
+        return;
+      }
       if (!response.ok) throw new Error('Emojis unavailable');
       const result = await response.json();
       const emojis = Array.isArray(result.emojis) ? result.emojis : [];
@@ -489,17 +534,31 @@ if (document.body.dataset.page === 'perfil') {
         image.alt = '';
         image.loading = 'lazy';
         button.append(image);
+        button.addEventListener('mousedown', event => event.preventDefault());
         button.addEventListener('click', () => {
           const token = `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
-          const nextLength = biographyInput.value.length - (biographyInput.selectionEnd - biographyInput.selectionStart) + token.length;
-          if (nextLength > 300) {
+          if (getBiographyEditorValue(biographyInput).length + token.length > 300) {
             editorStatus.textContent = 'No hay espacio suficiente para insertar este emoji.';
             return;
           }
-          biographyInput.setRangeText(token, biographyInput.selectionStart, biographyInput.selectionEnd, 'end');
+          biographyInput.focus();
+          const selection = window.getSelection();
+          const range = selection?.rangeCount ? selection.getRangeAt(0) : document.createRange();
+          if (!selection?.rangeCount || !biographyInput.contains(range.commonAncestorContainer)) {
+            range.selectNodeContents(biographyInput);
+            range.collapse(false);
+          }
+          range.deleteContents();
+          const visualEmoji = createBiographyEmoji(emoji);
+          const caretAnchor = document.createTextNode('\u200b');
+          range.insertNode(caretAnchor);
+          range.insertNode(visualEmoji);
+          range.setStartAfter(caretAnchor);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
           editorStatus.textContent = '';
           biographyInput.dispatchEvent(new Event('input', {bubbles: true}));
-          biographyInput.focus();
         });
         emojiList.append(button);
       });
@@ -511,10 +570,10 @@ if (document.body.dataset.page === 'perfil') {
   };
   const closeProfileEditor = () => profileEditor?.close();
   const updateBiographyCount = () => {
-    biographyCount.textContent = `${biographyInput.value.length} / 300`;
+    biographyCount.textContent = `${getBiographyEditorValue(biographyInput).length} / 300`;
   };
   document.querySelector('#profile-edit')?.addEventListener('click', () => {
-    biographyInput.value = renderedProfile?.biography || '';
+    setBiographyEditorValue(biographyInput, renderedProfile?.biography || '');
     editorStatus.textContent = '';
     updateBiographyCount();
     profileEditor.showModal();
@@ -522,6 +581,10 @@ if (document.body.dataset.page === 'perfil') {
     loadServerEmojis();
   });
   biographyInput?.addEventListener('input', updateBiographyCount);
+  biographyInput?.addEventListener('paste', event => {
+    event.preventDefault();
+    document.execCommand('insertText', false, event.clipboardData?.getData('text/plain') || '');
+  });
   emojiSearch?.addEventListener('input', () => {
     const query = emojiSearch.value.trim().toLocaleLowerCase('es');
     emojiList.querySelectorAll('button').forEach(button => {
@@ -543,7 +606,7 @@ if (document.body.dataset.page === 'perfil') {
           Authorization: `Bearer ${discordSession.token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({biography: biographyInput.value})
+        body: JSON.stringify({biography: getBiographyEditorValue(biographyInput)})
       });
       if (!response.ok) throw new Error('No se pudo guardar la biografía');
       const result = await response.json();
