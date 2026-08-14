@@ -3229,14 +3229,24 @@ app.get("/api/profiles/:discordId", async (req, res) => {
   res.json({ profile });
 });
 
-app.get("/api/community/emojis", async (_req, res) => {
+app.get("/api/community/emojis", async (req, res) => {
   if (!client.isReady() || !discordGuildId) {
     res.status(503).json({error: "Discord community emojis are not available yet"});
     return;
   }
 
   try {
+    const viewer = await getAuthenticatedDiscordUser(req.headers.authorization);
+    if (!viewer) {
+      res.status(401).json({error: "Sign in with Discord to use community emojis"});
+      return;
+    }
     const guild = client.guilds.cache.get(discordGuildId) ?? await client.guilds.fetch(discordGuildId);
+    const member = await guild.members.fetch(viewer.id).catch(() => null);
+    if (!member) {
+      res.status(403).json({error: "Join the Cloud Discord server to use community emojis"});
+      return;
+    }
     const collection = await guild.emojis.fetch();
     const emojis = collection
       .filter((emoji) => Boolean(emoji.name) && emoji.available !== false)
@@ -3244,11 +3254,14 @@ app.get("/api/community/emojis", async (_req, res) => {
         id: emoji.id,
         name: emoji.name!,
         animated: Boolean(emoji.animated),
-        url: `https://cdn.discordapp.com/emojis/${emoji.id}.webp?size=64&quality=lossless`,
+        url: emoji.imageURL({
+          extension: emoji.animated ? "gif" : "webp",
+          size: 64,
+        }),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
 
-    res.setHeader("Cache-Control", "public, max-age=300");
+    res.setHeader("Cache-Control", "private, max-age=300");
     res.json({emojis});
   } catch (error) {
     console.error("Could not load Discord community emojis", error);
