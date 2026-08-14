@@ -771,6 +771,7 @@ if (document.body.dataset.page === 'perfil') {
     if (!biographyEditing) return;
     draftBiography = getBiographyEditorValue(biographyInput);
     biographyEditing = false;
+    document.body.classList.remove('profile-biography-active');
     biographySelectionRange = null;
     biographyInput.contentEditable = 'false';
     biographyInput.removeAttribute('role');
@@ -782,6 +783,7 @@ if (document.body.dataset.page === 'perfil') {
   const activateBiographyEditor = () => {
     if (!editMode || biographyEditing) return;
     biographyEditing = true;
+    document.body.classList.add('profile-biography-active');
     lastValidBiography = draftBiography;
     setBiographyEditorValue(biographyInput, draftBiography);
     biographyInput.contentEditable = 'true';
@@ -805,6 +807,7 @@ if (document.body.dataset.page === 'perfil') {
     biographyEditing = false;
     editMode = false;
     document.body.classList.remove('profile-edit-mode');
+    document.body.classList.remove('profile-biography-active');
     editControls.hidden = true;
     inlineEditorTools.hidden = true;
     biographyInput.contentEditable = 'false';
