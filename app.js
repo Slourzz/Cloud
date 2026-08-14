@@ -534,10 +534,13 @@ if (document.body.dataset.page === 'perfil') {
       item.hidden = Boolean(query) && !item.dataset.search.includes(query);
     });
   });
-  const profileEditor = document.querySelector('#profile-editor');
-  const biographyInput = document.querySelector('#profile-biography-input');
+  const biographyInput = document.querySelector('#profile-biography');
+  const biographyCard = document.querySelector('.profile-bio-card');
+  const inlineEditorTools = document.querySelector('#profile-inline-editor-tools');
   const biographyCount = document.querySelector('#profile-biography-count');
   const editorStatus = document.querySelector('#profile-editor-status');
+  const editControls = document.querySelector('#profile-edit-controls');
+  const unsavedDialog = document.querySelector('#profile-unsaved-dialog');
   const emojiList = document.querySelector('#profile-emoji-list');
   const emojiSearch = document.querySelector('#profile-emoji-search');
   const emojiPicker = document.querySelector('#profile-emoji-picker');
@@ -547,6 +550,11 @@ if (document.body.dataset.page === 'perfil') {
   let serverEmojis = [];
   let serverEmojiMessage = 'Cargando emojis del servidor…';
   let serverEmojisLoaded = false;
+  let editMode = false;
+  let biographyEditing = false;
+  let originalBiography = '';
+  let draftBiography = '';
+  let lastValidBiography = '';
   const insertEmoji = item => {
     const rawValue = item.kind === 'server'
       ? `<${item.animated ? 'a' : ''}:${item.name}:${item.id}>`
@@ -653,22 +661,114 @@ if (document.body.dataset.page === 'perfil') {
     emojiPicker.hidden = true;
     emojiToggle.setAttribute('aria-expanded', 'false');
   };
-  const closeProfileEditor = () => {
-    closeEmojiPicker();
-    profileEditor?.close();
-  };
   const updateBiographyCount = () => {
     biographyCount.textContent = `${getBiographyEditorValue(biographyInput).length} / 300`;
   };
-  document.querySelector('#profile-edit')?.addEventListener('click', () => {
-    setBiographyEditorValue(biographyInput, renderedProfile?.biography || '');
+  const deactivateBiographyEditor = () => {
+    if (!biographyEditing) return;
+    draftBiography = getBiographyEditorValue(biographyInput);
+    biographyEditing = false;
+    biographyInput.contentEditable = 'false';
+    biographyInput.removeAttribute('role');
+    biographyInput.removeAttribute('aria-multiline');
+    inlineEditorTools.hidden = true;
+    closeEmojiPicker();
+    renderProfileBiography(biographyInput, draftBiography);
+  };
+  const activateBiographyEditor = () => {
+    if (!editMode || biographyEditing) return;
+    biographyEditing = true;
+    lastValidBiography = draftBiography;
+    setBiographyEditorValue(biographyInput, draftBiography);
+    biographyInput.contentEditable = 'true';
+    biographyInput.setAttribute('role', 'textbox');
+    biographyInput.setAttribute('aria-multiline', 'true');
+    inlineEditorTools.hidden = false;
     editorStatus.textContent = '';
     updateBiographyCount();
-    profileEditor.showModal();
     biographyInput.focus();
     loadServerEmojis();
+  };
+  const leaveEditMode = biography => {
+    closeEmojiPicker();
+    biographyEditing = false;
+    editMode = false;
+    document.body.classList.remove('profile-edit-mode');
+    editControls.hidden = true;
+    inlineEditorTools.hidden = true;
+    biographyInput.contentEditable = 'false';
+    renderProfileBiography(biographyInput, biography);
+    document.querySelector('#profile-edit').hidden = false;
+  };
+  const saveBiography = async ({exitAfter = false} = {}) => {
+    if (!renderedProfile?.id || renderedProfile.id !== discordSession?.user?.id) return false;
+    deactivateBiographyEditor();
+    const saveButtons = [document.querySelector('#profile-edit-save'), document.querySelector('#profile-edit-confirm-save')];
+    saveButtons.forEach(button => { if (button) button.disabled = true; });
+    const topSave = document.querySelector('#profile-edit-save');
+    const previousLabel = topSave?.textContent;
+    if (topSave) topSave.textContent = 'Guardando…';
+    try {
+      const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(renderedProfile.id)}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${discordSession.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({biography: draftBiography})
+      });
+      if (!response.ok) throw new Error('No se pudo guardar la biografía');
+      const result = await response.json();
+      renderedProfile = result.profile;
+      originalBiography = renderedProfile.biography || '';
+      draftBiography = originalBiography;
+      renderProfileBiography(biographyInput, originalBiography);
+      if (unsavedDialog.open) unsavedDialog.close();
+      if (exitAfter) leaveEditMode(originalBiography);
+      else if (topSave) {
+        topSave.textContent = 'Guardado';
+        setTimeout(() => { topSave.textContent = 'Guardar'; }, 1300);
+      }
+      return true;
+    } catch (error) {
+      editorStatus.textContent = error instanceof Error ? error.message : 'No se pudo guardar la biografía.';
+      if (topSave) topSave.textContent = previousLabel || 'Guardar';
+      return false;
+    } finally {
+      saveButtons.forEach(button => { if (button) button.disabled = false; });
+    }
+  };
+  document.querySelector('#profile-edit')?.addEventListener('click', () => {
+    originalBiography = renderedProfile?.biography || '';
+    draftBiography = originalBiography;
+    editMode = true;
+    document.body.classList.add('profile-edit-mode');
+    editControls.hidden = false;
+    document.querySelector('#profile-edit').hidden = true;
+    renderProfileBiography(biographyInput, draftBiography);
   });
-  biographyInput?.addEventListener('input', updateBiographyCount);
+  biographyCard?.addEventListener('click', event => {
+    if (!editMode || emojiPicker.contains(event.target) || event.target.closest('button, a, input')) return;
+    activateBiographyEditor();
+  });
+  biographyInput?.addEventListener('input', () => {
+    const nextBiography = getBiographyEditorValue(biographyInput);
+    if (nextBiography.length > 300) {
+      setBiographyEditorValue(biographyInput, lastValidBiography);
+      const range = document.createRange();
+      range.selectNodeContents(biographyInput);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      editorStatus.textContent = 'La biografía admite hasta 300 caracteres.';
+    } else {
+      lastValidBiography = nextBiography;
+      draftBiography = nextBiography;
+      editorStatus.textContent = '';
+    }
+    updateBiographyCount();
+  });
   biographyInput?.addEventListener('paste', event => {
     event.preventDefault();
     document.execCommand('insertText', false, event.clipboardData?.getData('text/plain') || '');
@@ -698,35 +798,21 @@ if (document.body.dataset.page === 'perfil') {
   });
   document.addEventListener('pointerdown', event => {
     if (!emojiPicker.hidden && !emojiPicker.contains(event.target) && event.target !== emojiToggle) closeEmojiPicker();
+    if (editMode && biographyEditing && !biographyCard.contains(event.target)) deactivateBiographyEditor();
   });
-  document.querySelector('#profile-editor-close')?.addEventListener('click', closeProfileEditor);
-  document.querySelector('#profile-editor-cancel')?.addEventListener('click', closeProfileEditor);
-  document.querySelector('#profile-editor-form')?.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (!renderedProfile?.id || renderedProfile.id !== discordSession?.user?.id) return;
-    const saveButton = document.querySelector('#profile-editor-save');
-    saveButton.disabled = true;
-    editorStatus.textContent = 'Guardando…';
-    try {
-      const response = await fetch(`${CLOUD_API_BASE}/api/profiles/${encodeURIComponent(renderedProfile.id)}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${discordSession.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({biography: getBiographyEditorValue(biographyInput)})
-      });
-      if (!response.ok) throw new Error('No se pudo guardar la biografía');
-      const result = await response.json();
-      renderedProfile = result.profile;
-      renderProfileBiography(document.querySelector('#profile-biography'), renderedProfile.biography);
-      closeProfileEditor();
-    } catch (error) {
-      editorStatus.textContent = error instanceof Error ? error.message : 'No se pudo guardar la biografía.';
-    } finally {
-      saveButton.disabled = false;
-    }
+  document.querySelector('#profile-edit-save')?.addEventListener('click', () => saveBiography());
+  document.querySelector('#profile-edit-exit')?.addEventListener('click', () => {
+    deactivateBiographyEditor();
+    if (draftBiography !== originalBiography) unsavedDialog.showModal();
+    else leaveEditMode(originalBiography);
   });
+  document.querySelector('#profile-edit-revert')?.addEventListener('click', () => {
+    draftBiography = originalBiography;
+    unsavedDialog.close();
+    leaveEditMode(originalBiography);
+  });
+  document.querySelector('#profile-edit-confirm-save')?.addEventListener('click', () => saveBiography({exitAfter: true}));
+  unsavedDialog?.addEventListener('cancel', event => event.preventDefault());
   renderProfilePage();
 } else if (discordSession?.token) {
   fetch(`${CLOUD_API_BASE}/api/auth/discord/me`, {

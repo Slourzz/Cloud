@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=profile14">
+  <link rel="stylesheet" href="./styles.css?v=profile15">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
   <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@17.0.3/dist/twemoji.min.js" integrity="sha384-Y5xukbGJwykbHHkTbLJykYLcBPFxrwipTbEh0puxhkz9CZ90raTPGe2Ks4vCxsYU" crossorigin="anonymous"></script>
 </head>
@@ -34,6 +34,7 @@
         <div class="profile-sticky-stage">
           <div class="cloud-profile-banner"><canvas id="profile-kawarp" aria-hidden="true"></canvas><span></span><span></span><span></span></div>
           <button class="profile-corner-share" id="profile-copy-url" type="button" aria-label="Copiar enlace del perfil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5 15.5 8m-7 3.5 7 4.5M6 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm11-4a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm0 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg><span>Compartir</span></button>
+          <div id="profile-edit-controls" class="profile-edit-controls" hidden><button id="profile-edit-save" type="button">Guardar</button><button id="profile-edit-exit" type="button">Salir</button></div>
           <img id="profile-avatar" class="cloud-profile-avatar profile-transform-avatar" src="./assets/cloud-app-icon.png" alt="">
 
           <section class="profile-summary" aria-label="Perfil de Cloud">
@@ -44,7 +45,18 @@
             </div>
             <section class="profile-bio-card" aria-labelledby="profile-bio-title">
               <span id="profile-bio-title">Biografía</span>
-              <p id="profile-biography"></p>
+              <p id="profile-biography" tabindex="-1"></p>
+              <div id="profile-inline-editor-tools" class="profile-inline-editor-tools" hidden>
+                <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false">☺</button>
+                <output id="profile-biography-count">0 / 300</output>
+                <p id="profile-editor-status" role="status" aria-live="polite"></p>
+                <section id="profile-emoji-picker" class="profile-emoji-picker" aria-label="Selector de emojis" hidden>
+                  <div class="profile-emoji-picker-head"><strong>Emojis</strong><input id="profile-emoji-search" type="search" placeholder="Buscar" autocomplete="off"></div>
+                  <nav id="profile-emoji-categories" class="profile-emoji-categories" aria-label="Categorías de emojis"></nav>
+                  <div id="profile-emoji-list" class="profile-emoji-list"></div>
+                  <small class="profile-twemoji-credit">Gráficos de <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noreferrer">Twemoji</a> · CC-BY 4.0</small>
+                </section>
+              </div>
             </section>
             <section class="profile-recent-card" aria-labelledby="profile-recent-title">
               <header><h2 id="profile-recent-title">Últimas contribuciones</h2></header>
@@ -67,26 +79,10 @@
       </article>
     </main>
   </div>
-  <dialog id="profile-editor" class="profile-editor-dialog" aria-labelledby="profile-editor-title">
-    <form id="profile-editor-form" method="dialog">
-      <header><div><span>Personalizar perfil</span><h2 id="profile-editor-title">Editar biografía</h2></div><button id="profile-editor-close" type="button" aria-label="Cerrar">×</button></header>
-      <label for="profile-biography-input">Biografía</label>
-      <div class="profile-biography-composer">
-        <div id="profile-biography-input" class="profile-biography-input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Cuéntale algo a la comunidad de Cloud…"></div>
-        <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false">☺</button>
-        <section id="profile-emoji-picker" class="profile-emoji-picker" aria-label="Selector de emojis" hidden>
-          <div class="profile-emoji-picker-head"><strong>Emojis</strong><input id="profile-emoji-search" type="search" placeholder="Buscar" autocomplete="off"></div>
-          <nav id="profile-emoji-categories" class="profile-emoji-categories" aria-label="Categorías de emojis"></nav>
-          <div id="profile-emoji-list" class="profile-emoji-list"></div>
-          <small class="profile-twemoji-credit">Gráficos de <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noreferrer">Twemoji</a> · CC-BY 4.0</small>
-        </section>
-      </div>
-      <div class="profile-editor-meta"><span>Texto público en tu perfil</span><output id="profile-biography-count">0 / 300</output></div>
-      <footer><button class="button secondary" id="profile-editor-cancel" type="button">Cancelar</button><button class="button primary" id="profile-editor-save" type="submit">Guardar cambios</button></footer>
-      <p id="profile-editor-status" role="status" aria-live="polite"></p>
-    </form>
+  <dialog id="profile-unsaved-dialog" class="profile-unsaved-dialog" aria-labelledby="profile-unsaved-title">
+    <div><span>Cambios sin guardar</span><h2 id="profile-unsaved-title">¿Quieres guardar tu biografía?</h2><p>Si sales ahora, puedes revertir los cambios o guardarlos antes de volver al perfil.</p><footer><button id="profile-edit-revert" type="button">Revertir</button><button id="profile-edit-confirm-save" type="button">Guardar</button></footer></div>
   </dialog>
-  <script src="./app.js?v=profile14"></script>
+  <script src="./app.js?v=profile15"></script>
   <script type="module" src="./profile-kawarp.js?v=1"></script>
 </body>
 </html>
