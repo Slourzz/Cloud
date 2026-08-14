@@ -424,6 +424,13 @@ if (document.body.dataset.page === 'perfil') {
   });
   window.addEventListener('scroll', updateProfileScrollScene, {passive: true});
   window.addEventListener('resize', updateProfileScrollScene);
+  document.querySelector('.profile-contributions')?.addEventListener('wheel', event => {
+    const stage = document.querySelector('.profile-sticky-stage');
+    const list = document.querySelector('#profile-contribution-list');
+    if (!stage?.classList.contains('is-contributions-view') || !list || window.matchMedia('(max-width: 820px)').matches) return;
+    event.preventDefault();
+    list.scrollTop += event.deltaY;
+  }, {passive: false});
   document.querySelector('#profile-contribution-search')?.addEventListener('input', event => {
     const query = event.currentTarget.value.trim().toLocaleLowerCase('es');
     document.querySelectorAll('.profile-contribution-item').forEach(item => {
