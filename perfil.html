@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=profile9">
+  <link rel="stylesheet" href="./styles.css?v=profile11">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
 </head>
 <body data-page="perfil">
@@ -31,7 +31,7 @@
 
       <article id="profile-content" class="cloud-profile profile-scroll-track" hidden>
         <div class="profile-sticky-stage">
-          <div class="cloud-profile-banner"><span></span><span></span><span></span></div>
+          <div class="cloud-profile-banner"><canvas id="profile-kawarp" aria-hidden="true"></canvas><span></span><span></span><span></span></div>
           <button class="profile-corner-share" id="profile-copy-url" type="button" aria-label="Copiar enlace del perfil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5 15.5 8m-7 3.5 7 4.5M6 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm11-4a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm0 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg><span>Compartir</span></button>
           <img id="profile-avatar" class="cloud-profile-avatar profile-transform-avatar" src="./assets/cloud-app-icon.png" alt="">
 
@@ -46,7 +46,7 @@
               <p id="profile-biography"></p>
             </section>
             <section class="profile-recent-card" aria-labelledby="profile-recent-title">
-              <header><div><span>Actividad reciente</span><h2 id="profile-recent-title">Últimas contribuciones</h2></div><small>TTML</small></header>
+              <header><h2 id="profile-recent-title">Últimas contribuciones</h2></header>
               <div id="profile-recent-list" class="profile-recent-list"></div>
               <p id="profile-recent-empty" class="profile-recent-empty" hidden>Aún no hay contribuciones.</p>
             </section>
@@ -77,5 +77,6 @@
     </form>
   </dialog>
   <script src="./app.js?v=profile11"></script>
+  <script type="module" src="./profile-kawarp.js?v=1"></script>
 </body>
 </html>
