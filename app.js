@@ -244,6 +244,93 @@ const getBiographyCharacterCount = biography => {
   return Array.from(new Intl.Segmenter('es', {granularity: 'grapheme'}).segment(visibleBiography)).length;
 };
 
+const DEFAULT_PROFILE_PALETTE = {
+  vibrant: [234, 154, 151],
+  dark: [28, 18, 18],
+  mid: [94, 62, 60]
+};
+let activeProfilePalette = DEFAULT_PROFILE_PALETTE;
+let profileThemeAnimation = 0;
+const extractProfilePalette = image => {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 80;
+    canvas.height = 80;
+    const context = canvas.getContext('2d', {willReadFrequently: true});
+    if (!context) return DEFAULT_PROFILE_PALETTE;
+    context.drawImage(image, 0, 0, 80, 80);
+    const pixels = context.getImageData(0, 0, 80, 80).data;
+    const buckets = new Map();
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index + 3] < 128) continue;
+      const r = Math.round(pixels[index] / 10) * 10;
+      const g = Math.round(pixels[index + 1] / 10) * 10;
+      const b = Math.round(pixels[index + 2] / 10) * 10;
+      const key = `${r},${g},${b}`;
+      const bucket = buckets.get(key);
+      if (bucket) bucket.count += 1;
+      else buckets.set(key, {r, g, b, count: 1});
+    }
+    let vibrant = DEFAULT_PROFILE_PALETTE.vibrant;
+    let bestScore = -1;
+    for (const bucket of buckets.values()) {
+      if (bucket.count < 6) continue;
+      const maximum = Math.max(bucket.r, bucket.g, bucket.b) / 255;
+      const minimum = Math.min(bucket.r, bucket.g, bucket.b) / 255;
+      const saturation = maximum === 0 ? 0 : (maximum - minimum) / maximum;
+      if (maximum < .2 || maximum > .95) continue;
+      const score = saturation * 2.5 + maximum * .4 + Math.log(bucket.count + 1) * .15;
+      if (score > bestScore) {
+        bestScore = score;
+        vibrant = [bucket.r, bucket.g, bucket.b];
+      }
+    }
+    return {
+      vibrant,
+      dark: vibrant.map(value => Math.round(value * .12)),
+      mid: vibrant.map(value => Math.round(value * .4))
+    };
+  } catch {
+    return DEFAULT_PROFILE_PALETTE;
+  }
+};
+const setProfilePalette = palette => {
+  const profile = document.body.dataset.page === 'perfil' ? document.body : null;
+  if (!profile) return;
+  profile.style.setProperty('--profile-v', palette.vibrant.join(' '));
+  profile.style.setProperty('--profile-d', palette.dark.join(' '));
+  profile.style.setProperty('--profile-m', palette.mid.join(' '));
+};
+const animateProfilePalette = target => {
+  cancelAnimationFrame(profileThemeAnimation);
+  const source = activeProfilePalette;
+  const startedAt = performance.now();
+  window.dispatchEvent(new CustomEvent('cloud-profile-theme', {detail: {palette: target}}));
+  const interpolate = (from, to, amount) => Math.round(from + (to - from) * amount);
+  const frame = now => {
+    const raw = Math.min(1, (now - startedAt) / 1050);
+    const eased = raw < .5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
+    const palette = Object.fromEntries(['vibrant', 'dark', 'mid'].map(key => [
+      key,
+      source[key].map((value, index) => interpolate(value, target[key][index], eased))
+    ]));
+    setProfilePalette(palette);
+    if (raw < 1) profileThemeAnimation = requestAnimationFrame(frame);
+    else {
+      activeProfilePalette = target;
+    }
+  };
+  profileThemeAnimation = requestAnimationFrame(frame);
+};
+const applyProfileTheme = avatarUrl => {
+  setProfilePalette(activeProfilePalette);
+  if (!avatarUrl) return;
+  const image = new Image();
+  image.crossOrigin = 'anonymous';
+  image.onload = () => animateProfilePalette(extractProfilePalette(image));
+  image.src = avatarUrl;
+};
+
 async function renderProfilePage() {
   if (document.body.dataset.page !== 'perfil') return;
   const loading = document.querySelector('#profile-loading');
@@ -282,6 +369,7 @@ async function renderProfilePage() {
     const avatar = document.querySelector('#profile-avatar');
     avatar.src = user.avatarUrl || './assets/cloud-app-icon.png';
     avatar.alt = `Avatar de ${user.displayName || user.username}`;
+    applyProfileTheme(avatar.src);
     document.querySelector('#profile-display-name').textContent = user.displayName || user.username;
     document.querySelector('#profile-username').textContent = `@${user.username}`;
     renderProfileBiography(document.querySelector('#profile-biography'), user.biography);

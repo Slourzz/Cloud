@@ -9,11 +9,25 @@ if (canvas && banner && !reduceMotion.matches) {
   palette.width = 1024;
   palette.height = 512;
   const paletteContext = palette.getContext("2d");
-  const colors = ["#F2A68E", "#E8A2AE", "#C4A7E7", "#A8BFE0", "#9CCFD8", "#B8D9D7", "#D8B4D8", "#F1B48F"];
-  colors.forEach((color, index) => {
-    paletteContext.fillStyle = color;
-    paletteContext.fillRect((index % 4) * 256, Math.floor(index / 4) * 256, 256, 256);
-  });
+  const blend = (from, to, amount) => from.map((value, index) => Math.round(value + (to[index] - value) * amount));
+  const cssColor = color => `rgb(${color.join(" ")})`;
+  const paintPalette = ({vibrant, dark, mid}) => {
+    const colors = [
+      vibrant,
+      blend(vibrant, [255, 255, 255], .22),
+      blend(vibrant, [255, 255, 255], .42),
+      blend(vibrant, mid, .42),
+      mid,
+      blend(mid, [255, 255, 255], .2),
+      blend(dark, mid, .5),
+      dark
+    ];
+    colors.forEach((color, index) => {
+      paletteContext.fillStyle = cssColor(color);
+      paletteContext.fillRect((index % 4) * 256, Math.floor(index / 4) * 256, 256, 256);
+    });
+  };
+  paintPalette({vibrant: [234, 154, 151], dark: [28, 18, 18], mid: [94, 62, 60]});
 
   const kawarp = new Kawarp(canvas, {
     warpIntensity: 1.55,
@@ -21,12 +35,17 @@ if (canvas && banner && !reduceMotion.matches) {
     animationSpeed: .56,
     saturation: 1.45,
     dithering: .008,
-    transitionDuration: 0,
+    transitionDuration: 1050,
     tintIntensity: .18,
     scale: 1.08
   });
   kawarp.loadImageElement(palette);
   kawarp.isTransitioning = false;
+  window.addEventListener("cloud-profile-theme", event => {
+    if (!event.detail?.palette) return;
+    paintPalette(event.detail.palette);
+    kawarp.loadImageElement(palette);
+  });
 
   const resize = () => {
     const bounds = banner.getBoundingClientRect();
