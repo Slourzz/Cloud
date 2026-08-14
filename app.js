@@ -106,6 +106,26 @@ const saveDiscordSession = session => {
   renderProfilePage();
 };
 
+const renderProfileBiography = (container, biography) => {
+  const value = biography || 'Este usuario aún no ha añadido una biografía.';
+  const emojiPattern = /<(a?):([A-Za-z0-9_]{1,32}):(\d{15,22})>/g;
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  for (const match of value.matchAll(emojiPattern)) {
+    fragment.append(document.createTextNode(value.slice(cursor, match.index)));
+    const image = document.createElement('img');
+    image.className = 'profile-custom-emoji';
+    image.src = `https://cdn.discordapp.com/emojis/${match[3]}.webp?size=64&quality=lossless`;
+    image.alt = `:${match[2]}:`;
+    image.title = `:${match[2]}:`;
+    image.loading = 'lazy';
+    fragment.append(image);
+    cursor = match.index + match[0].length;
+  }
+  fragment.append(document.createTextNode(value.slice(cursor)));
+  container.replaceChildren(fragment);
+};
+
 async function renderProfilePage() {
   if (document.body.dataset.page !== 'perfil') return;
   const loading = document.querySelector('#profile-loading');
@@ -146,7 +166,7 @@ async function renderProfilePage() {
     avatar.alt = `Avatar de ${user.displayName || user.username}`;
     document.querySelector('#profile-display-name').textContent = user.displayName || user.username;
     document.querySelector('#profile-username').textContent = `@${user.username}`;
-    document.querySelector('#profile-biography').textContent = user.biography || 'Este usuario aún no ha añadido una biografía.';
+    renderProfileBiography(document.querySelector('#profile-biography'), user.biography);
     document.querySelector('#profile-discord-link').href = `https://discord.com/users/${encodeURIComponent(user.id)}`;
     const ownProfile = user.id === discordSession?.user?.id;
     document.querySelector('#profile-edit').hidden = !ownProfile;
@@ -447,6 +467,48 @@ if (document.body.dataset.page === 'perfil') {
   const biographyInput = document.querySelector('#profile-biography-input');
   const biographyCount = document.querySelector('#profile-biography-count');
   const editorStatus = document.querySelector('#profile-editor-status');
+  const emojiList = document.querySelector('#profile-emoji-list');
+  const emojiSearch = document.querySelector('#profile-emoji-search');
+  let serverEmojisLoaded = false;
+  const loadServerEmojis = async () => {
+    if (serverEmojisLoaded) return;
+    try {
+      const response = await fetch(`${CLOUD_API_BASE}/api/community/emojis`);
+      if (!response.ok) throw new Error('Emojis unavailable');
+      const result = await response.json();
+      const emojis = Array.isArray(result.emojis) ? result.emojis : [];
+      emojiList.replaceChildren();
+      emojis.forEach(emoji => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.emojiName = emoji.name.toLocaleLowerCase('es');
+        button.title = `:${emoji.name}:`;
+        button.setAttribute('aria-label', `Insertar emoji ${emoji.name}`);
+        const image = document.createElement('img');
+        image.src = emoji.url;
+        image.alt = '';
+        image.loading = 'lazy';
+        button.append(image);
+        button.addEventListener('click', () => {
+          const token = `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
+          const nextLength = biographyInput.value.length - (biographyInput.selectionEnd - biographyInput.selectionStart) + token.length;
+          if (nextLength > 300) {
+            editorStatus.textContent = 'No hay espacio suficiente para insertar este emoji.';
+            return;
+          }
+          biographyInput.setRangeText(token, biographyInput.selectionStart, biographyInput.selectionEnd, 'end');
+          editorStatus.textContent = '';
+          biographyInput.dispatchEvent(new Event('input', {bubbles: true}));
+          biographyInput.focus();
+        });
+        emojiList.append(button);
+      });
+      if (!emojis.length) emojiList.innerHTML = '<p>Este servidor todavía no tiene emojis disponibles.</p>';
+      serverEmojisLoaded = true;
+    } catch {
+      emojiList.innerHTML = '<p>No se pudieron cargar los emojis del servidor.</p>';
+    }
+  };
   const closeProfileEditor = () => profileEditor?.close();
   const updateBiographyCount = () => {
     biographyCount.textContent = `${biographyInput.value.length} / 300`;
@@ -457,8 +519,15 @@ if (document.body.dataset.page === 'perfil') {
     updateBiographyCount();
     profileEditor.showModal();
     biographyInput.focus();
+    loadServerEmojis();
   });
   biographyInput?.addEventListener('input', updateBiographyCount);
+  emojiSearch?.addEventListener('input', () => {
+    const query = emojiSearch.value.trim().toLocaleLowerCase('es');
+    emojiList.querySelectorAll('button').forEach(button => {
+      button.hidden = Boolean(query) && !button.dataset.emojiName.includes(query);
+    });
+  });
   document.querySelector('#profile-editor-close')?.addEventListener('click', closeProfileEditor);
   document.querySelector('#profile-editor-cancel')?.addEventListener('click', closeProfileEditor);
   document.querySelector('#profile-editor-form')?.addEventListener('submit', async event => {
@@ -479,7 +548,7 @@ if (document.body.dataset.page === 'perfil') {
       if (!response.ok) throw new Error('No se pudo guardar la biografía');
       const result = await response.json();
       renderedProfile = result.profile;
-      document.querySelector('#profile-biography').textContent = renderedProfile.biography || 'Este usuario aún no ha añadido una biografía.';
+      renderProfileBiography(document.querySelector('#profile-biography'), renderedProfile.biography);
       closeProfileEditor();
     } catch (error) {
       editorStatus.textContent = error instanceof Error ? error.message : 'No se pudo guardar la biografía.';
