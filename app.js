@@ -23,6 +23,7 @@ const iconPaths = {
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name]}</svg>`;
 const active = document.body.dataset.page;
+document.documentElement.classList.toggle('profile-document', active === 'perfil');
 const shell = document.querySelector('#site-shell');
 const navigation = document.createElement('header');
 navigation.className = 'top-navigation';
