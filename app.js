@@ -107,6 +107,56 @@ const saveDiscordSession = session => {
 };
 
 const TWEMOJI_CATEGORIES = window.CLOUD_TWEMOJI_CATEGORIES || [];
+const TWEMOJI_SEQUENCES = new Set(TWEMOJI_CATEGORIES.flatMap(category => category.items.map(([unicode]) => unicode)));
+const TWEMOJI_MAX_SEQUENCE_LENGTH = Math.max(...Array.from(TWEMOJI_SEQUENCES, unicode => Array.from(unicode).length));
+const getTwemojiAssetUrl = unicode => {
+  const codePoints = Array.from(unicode, character => character.codePointAt(0));
+  const preserveVariation = codePoints.includes(0x200D) || codePoints.includes(0x20E3);
+  const icon = codePoints
+    .filter(codePoint => preserveVariation || codePoint !== 0xFE0F)
+    .map(codePoint => codePoint.toString(16))
+    .join('-');
+  return `https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/svg/${icon}.svg`;
+};
+const createTwemojiImage = (unicode, editor = false) => {
+  const image = document.createElement('img');
+  image.src = getTwemojiAssetUrl(unicode);
+  image.alt = unicode;
+  image.className = editor ? 'emoji profile-editor-emoji profile-editor-twemoji' : 'emoji';
+  image.loading = 'lazy';
+  image.draggable = false;
+  if (editor) {
+    image.dataset.unicode = unicode;
+    image.contentEditable = 'false';
+  }
+  return image;
+};
+const appendTwemojiText = (target, text, editor = false) => {
+  const characters = Array.from(text);
+  let plainText = '';
+  for (let index = 0; index < characters.length;) {
+    let emoji = '';
+    let emojiLength = 0;
+    for (let length = Math.min(TWEMOJI_MAX_SEQUENCE_LENGTH, characters.length - index); length > 0; length -= 1) {
+      const candidate = characters.slice(index, index + length).join('');
+      if (TWEMOJI_SEQUENCES.has(candidate)) {
+        emoji = candidate;
+        emojiLength = length;
+        break;
+      }
+    }
+    if (!emoji) {
+      plainText += characters[index];
+      index += 1;
+      continue;
+    }
+    if (plainText) target.append(document.createTextNode(plainText));
+    target.append(createTwemojiImage(emoji, editor));
+    plainText = '';
+    index += emojiLength;
+  }
+  if (plainText) target.append(document.createTextNode(plainText));
+};
 const groupTwemojiVariants = entries => {
   const groups = new Map();
   entries.forEach(([unicode, name]) => {
@@ -134,7 +184,7 @@ const renderProfileBiography = (container, biography) => {
   const fragment = document.createDocumentFragment();
   let cursor = 0;
   for (const match of value.matchAll(emojiPattern)) {
-    fragment.append(document.createTextNode(value.slice(cursor, match.index)));
+    appendTwemojiText(fragment, value.slice(cursor, match.index));
     const image = document.createElement('img');
     image.className = 'profile-custom-emoji';
     image.src = `https://cdn.discordapp.com/emojis/${match[3]}.webp?size=64${match[1] ? '&animated=true' : ''}`;
@@ -144,9 +194,8 @@ const renderProfileBiography = (container, biography) => {
     fragment.append(image);
     cursor = match.index + match[0].length;
   }
-  fragment.append(document.createTextNode(value.slice(cursor)));
+  appendTwemojiText(fragment, value.slice(cursor));
   container.replaceChildren(fragment);
-  window.twemoji?.parse(container, {folder: 'svg', ext: '.svg'});
 };
 
 const createBiographyEmoji = ({id, name, animated, url}) => {
@@ -167,32 +216,16 @@ const setBiographyEditorValue = (editor, biography = '') => {
   const fragment = document.createDocumentFragment();
   let cursor = 0;
   for (const match of biography.matchAll(pattern)) {
-    fragment.append(document.createTextNode(biography.slice(cursor, match.index)));
+    appendTwemojiText(fragment, biography.slice(cursor, match.index), true);
     fragment.append(createBiographyEmoji({id: match[3], name: match[2], animated: Boolean(match[1])}));
     cursor = match.index + match[0].length;
   }
-  fragment.append(document.createTextNode(biography.slice(cursor)));
+  appendTwemojiText(fragment, biography.slice(cursor), true);
   editor.replaceChildren(fragment);
-  window.twemoji?.parse(editor, {folder: 'svg', ext: '.svg'});
-  editor.querySelectorAll('img.emoji').forEach(image => {
-    image.classList.add('profile-editor-emoji', 'profile-editor-twemoji');
-    image.dataset.unicode = image.alt;
-    image.contentEditable = 'false';
-    image.draggable = false;
-  });
 };
 
 const createBiographyTwemoji = unicode => {
-  const holder = document.createElement('span');
-  holder.textContent = unicode;
-  window.twemoji?.parse(holder, {folder: 'svg', ext: '.svg'});
-  const image = holder.querySelector('img');
-  if (!image) return document.createTextNode(unicode);
-  image.classList.add('profile-editor-emoji', 'profile-editor-twemoji');
-  image.dataset.unicode = unicode;
-  image.contentEditable = 'false';
-  image.draggable = false;
-  return image;
+  return createTwemojiImage(unicode, true);
 };
 
 const getBiographyEditorValue = editor => {
@@ -608,8 +641,7 @@ if (document.body.dataset.page === 'perfil') {
   };
   const createTwemojiPreview = unicode => {
     const holder = document.createElement('span');
-    holder.textContent = unicode;
-    window.twemoji?.parse(holder, {folder: 'svg', ext: '.svg'});
+    holder.append(createTwemojiImage(unicode));
     return holder;
   };
   const showTonePopover = (item, anchor) => {
@@ -629,9 +661,9 @@ if (document.body.dataset.page === 'perfil') {
     });
     emojiPicker.append(tonePopover);
     const anchorRect = anchor.getBoundingClientRect();
-    const pickerRect = emojiPicker.getBoundingClientRect();
-    const left = Math.max(8, Math.min(anchorRect.left - pickerRect.left + anchorRect.width / 2 - tonePopover.offsetWidth / 2, pickerRect.width - tonePopover.offsetWidth - 8));
-    const top = anchorRect.top - pickerRect.top - tonePopover.offsetHeight - 8;
+    const left = Math.max(8, Math.min(anchorRect.left + anchorRect.width / 2 - tonePopover.offsetWidth / 2, window.innerWidth - tonePopover.offsetWidth - 8));
+    const above = anchorRect.top - tonePopover.offsetHeight - 8;
+    const top = above >= 8 ? above : anchorRect.bottom + 8;
     tonePopover.style.left = `${left}px`;
     tonePopover.style.top = `${top}px`;
   };
@@ -672,6 +704,7 @@ if (document.body.dataset.page === 'perfil') {
     if (!items.length) emojiList.innerHTML = '<p>No se encontraron emojis.</p>';
   };
   emojiList.addEventListener('scroll', () => {
+    closeTonePopover();
     if (emojiRenderCursor >= visibleEmojiItems.length) return;
     if (emojiList.scrollTop + emojiList.clientHeight >= emojiList.scrollHeight - 120) appendEmojiBatch();
   }, {passive: true});

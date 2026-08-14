@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+1p:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=profile18">
+  <link rel="stylesheet" href="./styles.css?v=profile19">
   <link rel="icon" type="image/png" href="./assets/cloud-app-icon.png">
   <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@17.0.3/dist/twemoji.min.js" integrity="sha384-Y5xukbGJwykbHHkTbLJykYLcBPFxrwipTbEh0puxhkz9CZ90raTPGe2Ks4vCxsYU" crossorigin="anonymous"></script>
   <script src="./twemoji-catalog.js?v=17.0"></script>
@@ -46,17 +46,19 @@
             </div>
             <section class="profile-bio-card" aria-labelledby="profile-bio-title">
               <span id="profile-bio-title">Biografía</span>
-              <p id="profile-biography" tabindex="-1"></p>
-              <div id="profile-inline-editor-tools" class="profile-inline-editor-tools" hidden>
-                <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false">☺</button>
-                <output id="profile-biography-count">0 / 300</output>
-                <p id="profile-editor-status" role="status" aria-live="polite"></p>
-                <section id="profile-emoji-picker" class="profile-emoji-picker" aria-label="Selector de emojis" hidden>
-                  <div class="profile-emoji-picker-head"><strong>Emojis</strong><input id="profile-emoji-search" type="search" placeholder="Buscar" autocomplete="off"></div>
-                  <nav id="profile-emoji-categories" class="profile-emoji-categories" aria-label="Categorías de emojis"></nav>
-                  <div id="profile-emoji-list" class="profile-emoji-list"></div>
-                  <small class="profile-twemoji-credit">Gráficos de <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noreferrer">Twemoji</a> · CC-BY 4.0</small>
-                </section>
+              <div class="profile-biography-edit-area">
+                <p id="profile-biography" tabindex="-1"></p>
+                <div id="profile-inline-editor-tools" class="profile-inline-editor-tools" hidden>
+                  <button id="profile-emoji-toggle" class="profile-emoji-toggle" type="button" aria-label="Abrir selector de emojis" aria-expanded="false">☺</button>
+                  <output id="profile-biography-count">0 / 300</output>
+                  <p id="profile-editor-status" role="status" aria-live="polite"></p>
+                  <section id="profile-emoji-picker" class="profile-emoji-picker" aria-label="Selector de emojis" hidden>
+                    <div class="profile-emoji-picker-head"><strong>Emojis</strong><input id="profile-emoji-search" type="search" placeholder="Buscar" autocomplete="off"></div>
+                    <nav id="profile-emoji-categories" class="profile-emoji-categories" aria-label="Categorías de emojis"></nav>
+                    <div id="profile-emoji-list" class="profile-emoji-list"></div>
+                    <small class="profile-twemoji-credit">Gráficos de <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noreferrer">Twemoji</a> · CC-BY 4.0</small>
+                  </section>
+                </div>
               </div>
             </section>
             <section class="profile-recent-card" aria-labelledby="profile-recent-title">
@@ -83,7 +85,7 @@
   <dialog id="profile-unsaved-dialog" class="profile-unsaved-dialog" aria-labelledby="profile-unsaved-title">
     <div><span>Cambios sin guardar</span><h2 id="profile-unsaved-title">¿Quieres guardar tu biografía?</h2><p>Si sales ahora, puedes revertir los cambios o guardarlos antes de volver al perfil.</p><footer><button id="profile-edit-revert" type="button">Revertir</button><button id="profile-edit-confirm-save" type="button">Guardar</button></footer></div>
   </dialog>
-  <script src="./app.js?v=profile17"></script>
+  <script src="./app.js?v=profile19"></script>
   <script type="module" src="./profile-kawarp.js?v=1"></script>
 </body>
 </html>
