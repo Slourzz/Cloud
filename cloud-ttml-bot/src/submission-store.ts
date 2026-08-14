@@ -1696,7 +1696,7 @@ export async function getDiscordSession(tokenHash: string) {
   return result.rows[0]?.user_data;
 }
 
-export async function getApprovedSubmissionsBySubmitter(
+export async function getApprovedSubmissionsByContributor(
   discordId: string,
   limit = 50,
 ) {
@@ -1707,7 +1707,8 @@ export async function getApprovedSubmissionsBySubmitter(
       .filter(
         (submission) =>
           submission.status === "approved" &&
-          submission.submitter?.id === discordId,
+          (submission.submitter?.id === discordId ||
+            submission.moderator?.id === discordId),
       )
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, safeLimit);
@@ -1728,7 +1729,10 @@ export async function getApprovedSubmissionsBySubmitter(
         moderator
       FROM ttml_submissions
       WHERE status = 'approved'
-        AND submitter->>'id' = $1
+        AND (
+          submitter->>'id' = $1
+          OR moderator->>'id' = $1
+        )
       ORDER BY updated_at DESC
       LIMIT $2
     `,

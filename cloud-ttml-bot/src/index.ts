@@ -80,7 +80,7 @@ import {
   getCommunityArtistMediaImage,
   getMaintenanceSnapshot,
   getApprovedSubmission,
-  getApprovedSubmissionsBySubmitter,
+  getApprovedSubmissionsByContributor,
   getTtmlPlayCounts,
   getDiscordAuthRequest,
   getDiscordProfile,
@@ -3312,7 +3312,7 @@ app.get("/api/profiles/:discordId/contributions", async (req, res) => {
     return;
   }
 
-  const submissions = await getApprovedSubmissionsBySubmitter(discordId);
+  const submissions = await getApprovedSubmissionsByContributor(discordId);
   const playCounts = await getTtmlPlayCounts(
     submissions.map((submission) => submission.id),
   );
