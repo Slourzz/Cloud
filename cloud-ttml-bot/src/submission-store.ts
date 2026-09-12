@@ -1676,6 +1676,37 @@ export async function getDiscordAuthRequest(state: string) {
   };
 }
 
+export async function findPendingDiscordAuthRequestByCode(code: string) {
+  const maxAge = 10 * 60 * 1000;
+  const normalizedCode = code.trim().toLowerCase();
+
+  if (!pool) {
+    return [...memoryAuthRequests.entries()]
+      .filter(
+        ([state, request]) =>
+          state.startsWith(normalizedCode) &&
+          request.status === "pending" &&
+          Date.now() - request.createdAt <= maxAge,
+      )
+      .sort(([, left], [, right]) => right.createdAt - left.createdAt)[0]?.[0];
+  }
+
+  const result = await pool.query<{ state: string }>(
+    `
+      SELECT state
+      FROM discord_auth_requests
+      WHERE state LIKE $1
+        AND status = 'pending'
+        AND created_at >= $2
+      ORDER BY created_at DESC
+      LIMIT 2
+    `,
+    [`${normalizedCode}%`, Date.now() - maxAge],
+  );
+
+  return result.rows.length === 1 ? result.rows[0].state : undefined;
+}
+
 export async function getDiscordSession(tokenHash: string) {
   if (!pool) {
     const session = memoryAuthSessions.get(tokenHash);

@@ -83,6 +83,7 @@ import {
   getApprovedSubmissionsByContributor,
   getTtmlPlayCounts,
   getDiscordAuthRequest,
+  findPendingDiscordAuthRequestByCode,
   getDiscordProfile,
   getDiscordSession,
   getDailyWebStats,
@@ -3055,6 +3056,34 @@ app.post("/api/auth/discord/start", async (_req, res) => {
     state,
     authorizeUrl: authorizeUrl.toString(),
   });
+});
+
+app.get("/api/auth/discord/code/:code", async (req, res) => {
+  const code = req.params.code.trim().toLowerCase();
+  if (!/^[0-9a-f]{4}$/.test(code)) {
+    res.status(400).json({ error: "El código debe tener cuatro caracteres." });
+    return;
+  }
+
+  const state = await findPendingDiscordAuthRequestByCode(code);
+  if (!state) {
+    res.status(404).json({ error: "El código no existe o ya venció." });
+    return;
+  }
+
+  const authorizeUrl = new URL("https://discord.com/oauth2/authorize");
+  authorizeUrl.searchParams.set("client_id", discordClientId!);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("redirect_uri", discordRedirectUri);
+  authorizeUrl.searchParams.set(
+    "scope",
+    discordGuildId ? "identify guilds.join" : "identify",
+  );
+  authorizeUrl.searchParams.set("state", state);
+  authorizeUrl.searchParams.set("prompt", "consent");
+
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ authorizeUrl: authorizeUrl.toString() });
 });
 
 app.get("/api/auth/discord/callback", async (req, res) => {
