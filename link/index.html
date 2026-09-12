@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111018">
+  <title>Vincular televisión — Cloud</title>
+  <link rel="icon" type="image/png" href="../assets/cloud-app-icon.png">
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:#111018}
+    *{box-sizing:border-box} body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 20% 15%,#44305c 0,transparent 40%),radial-gradient(circle at 85% 80%,#243b60 0,transparent 42%),#111018}
+    main{width:min(100%,480px);text-align:center} .logo{width:68px;height:68px;border-radius:18px;margin-bottom:22px}
+    h1{font-size:clamp(30px,8vw,44px);line-height:1.06;margin:0 0 14px} p{color:#bbb8c5;font-size:16px;line-height:1.55;margin:0 auto 28px;max-width:420px}
+    form{display:grid;gap:16px} label{font-size:14px;color:#d8d5df;text-align:left}
+    input{width:100%;height:68px;border:1px solid #48444f;border-radius:18px;background:#1c1a22;color:#fff;text-align:center;text-transform:uppercase;font-size:30px;font-weight:700;letter-spacing:.45em;padding-left:.45em;outline:none}
+    input:focus{border-color:#8d78ff;box-shadow:0 0 0 4px #8d78ff2e}
+    button{height:56px;border:0;border-radius:999px;background:#fff;color:#111018;font:700 16px inherit;cursor:pointer} button:disabled{opacity:.55;cursor:wait}
+    #message{min-height:24px;margin-top:18px;color:#ffb4b4;font-size:14px} small{display:block;color:#797580;font-size:12px;line-height:1.5;margin-top:30px}
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="../assets/cloud-app-icon.png" alt="Cloud">
+    <h1>Vincula tu televisión</h1>
+    <p>Escribe el código que aparece en Cloud TV. Después iniciarás sesión con Discord para identificar tu dispositivo.</p>
+    <form id="link-form">
+      <label for="code">Código de la televisión</label>
+      <input id="code" name="code" inputmode="text" autocomplete="one-time-code" maxlength="4" pattern="[0-9A-Fa-f]{4}" placeholder="••••" required autofocus>
+      <button type="submit">Continuar con Discord</button>
+    </form>
+    <div id="message" role="status" aria-live="polite"></div>
+    <small>Cloud sólo usa Discord para identificar tu cuenta. Tu música permanece en tus dispositivos.</small>
+  </main>
+  <script>
+    const backend='https://cloud-production-4b12.up.railway.app';
+    const form=document.querySelector('#link-form');
+    const input=document.querySelector('#code');
+    const button=form.querySelector('button');
+    const message=document.querySelector('#message');
+    const initial=new URLSearchParams(location.search).get('code');
+    if(initial) input.value=initial.slice(0,4).toUpperCase();
+    input.addEventListener('input',()=>{input.value=input.value.replace(/[^0-9a-f]/gi,'').slice(0,4).toUpperCase();message.textContent=''});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const code=input.value.trim();
+      if(!/^[0-9A-F]{4}$/.test(code)){message.textContent='Escribe los cuatro caracteres que muestra tu televisión.';return}
+      button.disabled=true;button.textContent='Buscando televisión…';message.textContent='';
+      try{
+        const response=await fetch(`${backend}/api/auth/discord/code/${encodeURIComponent(code)}`,{headers:{Accept:'application/json'}});
+        const data=await response.json();
+        if(!response.ok||!data.authorizeUrl) throw new Error(data.error||'No se pudo vincular la televisión.');
+        location.href=data.authorizeUrl;
+      }catch(error){message.textContent=error instanceof Error?error.message:'No se pudo vincular la televisión.';button.disabled=false;button.textContent='Continuar con Discord'}
+    });
+  </script>
+</body>
+</html>
